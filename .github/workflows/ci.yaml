@@ -1,0 +1,81 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+    tags: [v*.*.*]
+
+jobs:
+  build:
+    name: Test & Build
+    strategy:
+      matrix:
+        python-version: ['2.7', '3.7', '3.8', '3.10']
+    runs-on: [ubuntu-latest]
+    env:
+      PYTHON: ${{ matrix.python-version }}
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0 # fetch all history for setuptools_scm to be able to read tags
+
+      - uses: actions/setup-python@v4
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install python dependencies
+        run: |
+          pip install wheel build tox
+          pip install .[dev]
+
+      - name: Determine pyenv
+        id: pyenv
+        run: echo "::set-output name=value::py$(echo $PYTHON | tr -d '.')"
+
+      - name: Run tests
+        env:
+          TOXENV: ${{ steps.pyenv.outputs.value }}
+        run: tox
+
+      - name: Build python package
+        run: python -m build
+
+      - name: Upload coverage
+        uses: codecov/codecov-action@v3
+        with:
+          env_vars: PYTHON
+          fail_ci_if_error: true
+          files: .coverage.${{ steps.pyenv.outputs.value }}.xml
+
+      - uses: actions/upload-artifact@v3
+        if: matrix.python-version == '2.7' || matrix.python-version == '3.8'
+        with:
+          name: dist-${{ matrix.python-version }}
+          path: dist
+
+  publish:
+    name: Publish to PyPI
+    needs: build
+    runs-on: [ubuntu-latest]
+    if: github.event_name != 'pull_request'
+    steps:
+      - uses: actions/download-artifact@v3
+
+      - name: Organize files for upload
+        run: |
+          mkdir dist
+          mv dist-3.8/* dist/
+          mv dist-2.7/*.whl dist/
+
+      - name: Test Publish package
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          password: ${{ secrets.SHARED_PYPI_TEST_TOKEN }}
+          repository_url: https://test.pypi.org/legacy/
+
+      - name: Publish package
+        uses: pypa/gh-action-pypi-publish@release/v1
+        if: startsWith(github.event.ref, 'refs/tags/v')
+        with:
+          password: ${{ secrets.SHARED_PYPI_TOKEN }}
