@@ -362,11 +362,12 @@ class LLSDBaseParser(object):
     """
     Utility methods useful for parser subclasses.
     """
-    __slots__ = ['_buffer', '_index']
+    __slots__ = ['_buffer', '_index', '_unesc_buff']
 
     def __init__(self):
         self._buffer = b''
         self._index = 0
+        self._unesc_buff = bytearray(_UNESC_BUFF_LEN)
 
     def _error(self, message, offset=0):
         try:
@@ -406,9 +407,11 @@ class LLSDBaseParser(object):
         "Parse a delimited string."
         insert_idx = 0
         delim_ord = ord(delim)
-        unesc_buff = bytearray(_UNESC_BUFF_LEN)
+        # Preallocate a working buffer for the unescaped string output
+        # to avoid allocs in the hot loop.
+        unesc_buff = self._unesc_buff
         # Cache these in locals, otherwise we have to perform a lookup on
-        # `self` inside our hot loop.
+        # `self` in the hot loop.
         buff = self._buffer
         read_idx = self._index
         cc = 0
@@ -453,6 +456,7 @@ class LLSDBaseParser(object):
                 unesc_buff.extend(b"\x00" * _UNESC_BUFF_LEN)
         try:
             self._index = read_idx
+            # Slice off only what we used of the working decode buffer
             return unesc_buff[:insert_idx].decode('utf-8')
         except UnicodeDecodeError as exc:
             self._error(exc)
