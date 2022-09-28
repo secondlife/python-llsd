@@ -464,15 +464,17 @@ class LLSDBaseParser(object):
                 self._index = read_idx
                 self._error("Trying to read past end of buffer")
 
-            decode_buff[insert_idx] = cc
-            insert_idx += 1
-
-            # We inserted a character, check if we need to expand the buffer.
-            if insert_idx % _DECODE_BUFF_ALLOC_SIZE == 0:
-                # Any additions may now overflow the decoding buffer, make
-                # a new expanded buffer containing the existing contents.
+            try:
+                decode_buff[insert_idx] = cc
+            except IndexError:
+                # Oops, that overflowed the decoding buffer, make a
+                # new expanded buffer containing the existing contents.
                 decode_buff = bytearray(decode_buff)
                 decode_buff.extend(b"\x00" * _DECODE_BUFF_ALLOC_SIZE)
+                decode_buff[insert_idx] = cc
+
+            insert_idx += 1
+
         try:
             # Sync our local read index with the canonical one
             self._index = read_idx
