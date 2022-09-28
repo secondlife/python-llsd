@@ -407,40 +407,42 @@ class LLSDBaseParser(object):
         insert_idx = 0
         delim_ord = ord(delim)
         unesc_buff = bytearray(_UNESC_BUFF_LEN)
-        # Cache these in locals
+        # Cache these in locals, otherwise we have to perform a lookup on
+        # `self` inside our hot loop.
         buff = self._buffer
         read_idx = self._index
+        cc = 0
         while True:
             try:
                 cc = buff[read_idx]
+                read_idx += 1
+
+                if cc == _BACKSLASH_ORD:
+                    # Backslash, figure out if this is an \xNN hex escape or
+                    # something like \t
+                    cc = buff[read_idx]
+                    read_idx += 1
+                    if cc == _X_ORD:
+                        # It's a hex escape. char is the value of the two
+                        # following hex nybbles
+                        cc = int(chr(buff[read_idx]), 16) << 4
+                        read_idx += 1
+                        cc |= int(chr(buff[read_idx]), 16)
+                        read_idx += 1
+                    else:
+                        # escape char preceding anything other than the chars
+                        # in _escaped just results in that same char without
+                        # the escape char
+                        cc = self._escaped.get(cc, cc)
+                elif cc == delim_ord:
+                    break
             except IndexError:
+                # We can be reasonably sure that any IndexErrors inside here
+                # were caused by an out-of-bounds `buff[read_idx]`.
                 self._index = read_idx
                 self._error("Trying to read past end of buffer")
-                return
-            read_idx += 1
 
-            if cc == _BACKSLASH_ORD:
-                # Backslash, figure out if this is an \xNN hex escape or
-                # something like \t
-                cc = buff[read_idx]
-                read_idx += 1
-                if cc == _X_ORD:
-                    # Read the two hex nybbles
-                    byte_val = int(chr(buff[read_idx]), 16)
-                    read_idx += 1
-                    byte_val = (byte_val << 4) | int(chr(buff[read_idx]), 16)
-                    read_idx += 1
-                    unesc_buff[insert_idx] = byte_val
-                else:
-                    # escape char preceding anything other than the chars in
-                    # _escaped just results in that same char without the
-                    # escape char
-                    unesc_buff[insert_idx] = self._escaped.get(cc, cc)
-            elif cc == delim_ord:
-                break
-            else:
-                unesc_buff[insert_idx] = cc
-
+            unesc_buff[insert_idx] = cc
             insert_idx += 1
 
             # We inserted a character, check if we need to expand the buffer.

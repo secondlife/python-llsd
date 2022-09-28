@@ -507,6 +507,12 @@ class LLSDNotationUnitTest(unittest.TestCase):
         except llsd.LLSDParseError:
             pass
 
+    def testParseNotationUnterminatedString(self):
+        """
+        Test with an unterminated delimited string
+        """
+        self.assertRaises(llsd.LLSDParseError, self.llsd.parse, b"'foo")
+
 
 class LLSDBinaryUnitTest(unittest.TestCase):
     """
