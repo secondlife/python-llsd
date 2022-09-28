@@ -147,6 +147,8 @@ class PY3SemanticBytes(BytesType):
 
     def __getitem__(self, item):
         ret = super(PY3SemanticBytes, self).__getitem__(item)
+        # `buffer[n]` should return an integer, but slice syntax like
+        # `buffer[n:n+1]` should still return a `Bytes` object as before.
         if is_integer(item):
             return ord(ret)
         return ret
