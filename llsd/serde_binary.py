@@ -4,7 +4,7 @@ import struct
 import uuid
 
 from llsd.base import (_LLSD, LLSDBaseParser, LLSDSerializationError, _str_to_bytes, binary, is_integer, is_string,
-                       starts_with, uri)
+                       starts_with, uri, PY2, is_bytes, PY3SemanticBytes)
 
 
 class LLSDBinaryParser(LLSDBaseParser):
@@ -63,6 +63,10 @@ class LLSDBinaryParser(LLSDBaseParser):
         :param ignore_binary: parser throws away data in llsd binary nodes.
         :returns: returns a python object.
         """
+        if PY2 and is_bytes(buffer):
+            # We need to wrap this in a helper class so that individual element
+            # access works the same as in PY3
+            buffer = PY3SemanticBytes(buffer)
         self._buffer = buffer
         self._index = 0
         self._keep_binary = not ignore_binary

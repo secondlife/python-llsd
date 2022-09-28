@@ -141,6 +141,17 @@ else:
             return fmt
 
 
+class PY3SemanticBytes(BytesType):
+    """Wrapper to make `buffer[n]` return an integer like in Py3"""
+    __slots__ = []
+
+    def __getitem__(self, item):
+        ret = super(PY3SemanticBytes, self).__getitem__(item)
+        if is_integer(item):
+            return ord(ret)
+        return ret
+
+
 def is_integer(o):
     """ portable test if an object is like an int """
     return isinstance(o, IntTypes)

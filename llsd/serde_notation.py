@@ -4,7 +4,7 @@ import re
 import uuid
 
 from llsd.base import (_LLSD, B, LLSDBaseFormatter, LLSDBaseParser, LLSDParseError, LLSDSerializationError, UnicodeType,
-                       _format_datestr, _parse_datestr, _str_to_bytes, binary, uri)
+                       _format_datestr, _parse_datestr, _str_to_bytes, binary, uri, PY2, is_bytes, PY3SemanticBytes)
 
 _int_regex = re.compile(br"[-+]?\d+")
 _real_regex = re.compile(br"[-+]?(?:(\d+(\.\d*)?|\d*\.\d+)([eE][-+]?\d+)?)|[-+]?inf|[-+]?nan")
@@ -85,6 +85,11 @@ class LLSDNotationParser(LLSDBaseParser):
         """
         if buffer == b"":
             return False
+
+        if PY2 and is_bytes(buffer):
+            # We need to wrap this in a helper class so that individual element
+            # access works the same as in PY3
+            buffer = PY3SemanticBytes(buffer)
 
         self._buffer = buffer
         self._index = 0
