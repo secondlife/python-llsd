@@ -36,6 +36,7 @@ class LLSDXMLFormatter(LLSDBaseFormatter):
     module level format_xml is the most convenient interface to this
     functionality.
     """
+    __slots__ = []
 
     def _elt(self, name, contents=None):
         "Serialize a single element."

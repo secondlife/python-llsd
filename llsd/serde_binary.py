@@ -13,6 +13,8 @@ class LLSDBinaryParser(LLSDBaseParser):
 
     See http://wiki.secondlife.com/wiki/LLSD#Binary_Serialization
     """
+    __slots__ = ['_dispatch', '_keep_binary']
+
     def __init__(self):
         super(LLSDBinaryParser, self).__init__()
         # One way of dispatching based on the next character we see would be a

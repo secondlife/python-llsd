@@ -328,6 +328,8 @@ class LLSDNotationFormatter(LLSDBaseFormatter):
 
     See http://wiki.secondlife.com/wiki/LLSD#Notation_Serialization
     """
+    __slots__ = []
+
     def LLSD(self, v):
         return self._generate(v.thing)
     def UNDEF(self, v):

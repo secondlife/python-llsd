@@ -321,19 +321,6 @@ def _to_python(node):
     return NODE_HANDLERS[node.tag](node)
 
 
-def _hex_as_nybble(hex):
-    "Accepts a single hex character and returns a nybble."
-    if (hex >= b'0') and (hex <= b'9'):
-        return ord(hex) - ord(b'0')
-    elif (hex >= b'a') and (hex <=b'f'):
-        return 10 + ord(hex) - ord(b'a')
-    elif (hex >= b'A') and (hex <=b'F'):
-        return 10 + ord(hex) - ord(b'A')
-    else:
-        raise LLSDParseError('Invalid hex character: %s' % hex)
-
-
-
 class LLSDBaseFormatter(object):
     """
     This base class cannot be instantiated on its own: it assumes a subclass
@@ -366,13 +353,20 @@ class LLSDBaseFormatter(object):
         }
 
 
+_X_ORD = ord(b'x')
+_BACKSLASH_ORD = ord(b'\\')
+_UNESC_BUFF_LEN = 1024
+
+
 class LLSDBaseParser(object):
     """
     Utility methods useful for parser subclasses.
     """
+    __slots__ = ['_buffer', '_index']
+
     def __init__(self):
         self._buffer = b''
-        self._index  = 0
+        self._index = 0
 
     def _error(self, message, offset=0):
         try:
@@ -399,53 +393,65 @@ class LLSDBaseParser(object):
 
     # map char following escape char to corresponding character
     _escaped = {
-        b'a': b'\a',
-        b'b': b'\b',
-        b'f': b'\f',
-        b'n': b'\n',
-        b'r': b'\r',
-        b't': b'\t',
-        b'v': b'\v',
+        ord(b'a'): ord(b'\a'),
+        ord(b'b'): ord(b'\b'),
+        ord(b'f'): ord(b'\f'),
+        ord(b'n'): ord(b'\n'),
+        ord(b'r'): ord(b'\r'),
+        ord(b't'): ord(b'\t'),
+        ord(b'v'): ord(b'\v'),
     }
 
     def _parse_string_delim(self, delim):
         "Parse a delimited string."
-        parts = bytearray()
-        found_escape = False
-        found_hex = False
-        found_digit = False
-        byte = 0
+        insert_idx = 0
+        delim_ord = ord(delim)
+        unesc_buff = bytearray(_UNESC_BUFF_LEN)
+        # Cache these in locals
+        buff = self._buffer
+        read_idx = self._index
         while True:
-            cc = self._getc()
-            if found_escape:
-                if found_hex:
-                    if found_digit:
-                        found_escape = False
-                        found_hex = False
-                        found_digit = False
-                        byte <<= 4
-                        byte |= _hex_as_nybble(cc)
-                        parts.append(byte)
-                        byte = 0
-                    else:
-                        found_digit = True
-                        byte = _hex_as_nybble(cc)
-                elif cc == b'x':
-                    found_hex = True
+            try:
+                cc = buff[read_idx]
+            except IndexError:
+                self._index = read_idx
+                self._error("Trying to read past end of buffer")
+                return
+            read_idx += 1
+
+            if cc == _BACKSLASH_ORD:
+                # Backslash, figure out if this is an \xNN hex escape or
+                # something like \t
+                cc = buff[read_idx]
+                read_idx += 1
+                if cc == _X_ORD:
+                    # Read the two hex nybbles
+                    byte_val = int(chr(buff[read_idx]), 16)
+                    read_idx += 1
+                    byte_val = (byte_val << 4) | int(chr(buff[read_idx]), 16)
+                    read_idx += 1
+                    unesc_buff[insert_idx] = byte_val
                 else:
-                    found_escape = False
                     # escape char preceding anything other than the chars in
                     # _escaped just results in that same char without the
                     # escape char
-                    parts.extend(self._escaped.get(cc, cc))
-            elif cc == b'\\':
-                found_escape = True
-            elif cc == delim:
+                    unesc_buff[insert_idx] = self._escaped.get(cc, cc)
+            elif cc == delim_ord:
                 break
             else:
-                parts.extend(cc)
+                unesc_buff[insert_idx] = cc
+
+            insert_idx += 1
+
+            # We inserted a character, check if we need to expand the buffer.
+            if insert_idx % _UNESC_BUFF_LEN == 0:
+                # Any string this long may overflow the escape buffer,
+                # make a new expanded buffer
+                unesc_buff = bytearray(unesc_buff)
+                unesc_buff.extend(b"\x00" * _UNESC_BUFF_LEN)
         try:
-            return parts.decode('utf-8')
+            self._index = read_idx
+            return unesc_buff[:insert_idx].decode('utf-8')
         except UnicodeDecodeError as exc:
             self._error(exc)
 
