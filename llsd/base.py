@@ -355,19 +355,20 @@ class LLSDBaseFormatter(object):
 
 _X_ORD = ord(b'x')
 _BACKSLASH_ORD = ord(b'\\')
-_UNESC_BUFF_LEN = 1024
+_DECODE_BUFF_ALLOC_SIZE = 1024
 
 
 class LLSDBaseParser(object):
     """
     Utility methods useful for parser subclasses.
     """
-    __slots__ = ['_buffer', '_index', '_unesc_buff']
+    __slots__ = ['_buffer', '_index', '_decode_buff']
 
     def __init__(self):
         self._buffer = b''
         self._index = 0
-        self._unesc_buff = bytearray(_UNESC_BUFF_LEN)
+        # Scratch space for decoding delimited strings
+        self._decode_buff = bytearray(_DECODE_BUFF_ALLOC_SIZE)
 
     def _error(self, message, offset=0):
         try:
@@ -407,9 +408,9 @@ class LLSDBaseParser(object):
         "Parse a delimited string."
         insert_idx = 0
         delim_ord = ord(delim)
-        # Preallocate a working buffer for the unescaped string output
+        # Preallocate a working buffer for the decoded string output
         # to avoid allocs in the hot loop.
-        unesc_buff = self._unesc_buff
+        decode_buff = self._decode_buff
         # Cache these in locals, otherwise we have to perform a lookup on
         # `self` in the hot loop.
         buff = self._buffer
@@ -445,19 +446,20 @@ class LLSDBaseParser(object):
                 self._index = read_idx
                 self._error("Trying to read past end of buffer")
 
-            unesc_buff[insert_idx] = cc
+            decode_buff[insert_idx] = cc
             insert_idx += 1
 
             # We inserted a character, check if we need to expand the buffer.
-            if insert_idx % _UNESC_BUFF_LEN == 0:
-                # Any string this long may overflow the escape buffer,
-                # make a new expanded buffer
-                unesc_buff = bytearray(unesc_buff)
-                unesc_buff.extend(b"\x00" * _UNESC_BUFF_LEN)
+            if insert_idx % _DECODE_BUFF_ALLOC_SIZE == 0:
+                # Any additions may now overflow the decoding buffer, make
+                # a new expanded buffer containing the existing contents.
+                decode_buff = bytearray(decode_buff)
+                decode_buff.extend(b"\x00" * _DECODE_BUFF_ALLOC_SIZE)
         try:
+            # Sync our local read index with the canonical one
             self._index = read_idx
             # Slice off only what we used of the working decode buffer
-            return unesc_buff[:insert_idx].decode('utf-8')
+            return decode_buff[:insert_idx].decode('utf-8')
         except UnicodeDecodeError as exc:
             self._error(exc)
 
