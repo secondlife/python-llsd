@@ -440,10 +440,17 @@ class LLSDBaseParser(object):
                     if cc == _X_ORD:
                         # It's a hex escape. char is the value of the two
                         # following hex nybbles
-                        cc = int(chr(buff[read_idx]), 16) << 4
-                        read_idx += 1
-                        cc |= int(chr(buff[read_idx]), 16)
-                        read_idx += 1
+                        try:
+                            cc = int(chr(buff[read_idx]), 16) << 4
+                            read_idx += 1
+                            cc |= int(chr(buff[read_idx]), 16)
+                            read_idx += 1
+                        except ValueError as e:
+                            # One of the hex characters was likely invalid.
+                            # Wrap the ValueError so that we can provide a
+                            # byte offset in the error.
+                            self._index = read_idx
+                            self._error(str(e))
                     else:
                         # escape char preceding anything other than the chars
                         # in _escaped just results in that same char without
