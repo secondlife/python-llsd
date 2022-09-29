@@ -441,18 +441,23 @@ class LLSDBaseParser(object):
                     read_idx += 1
                     if cc == _X_ORD:
                         # It's a hex escape. char is the value of the two
-                        # following hex nybbles
+                        # following hex nybbles. This slice may result in
+                        # a short read (0 or 1 bytes), but either a
+                        # `ValueError` will be triggered by the first case,
+                        # and the second will cause an `IndexError` on the
+                        # next iteration of the loop.
+                        hex_bytes = buff[read_idx:read_idx + 2]
+                        read_idx += 2
                         try:
-                            cc = int(chr(buff[read_idx]), 16) << 4
-                            read_idx += 1
-                            cc |= int(chr(buff[read_idx]), 16)
-                            read_idx += 1
+                            # int() can parse a `bytes` containing hex,
+                            # no explicit `bytes.decode("ascii")` required.
+                            cc = int(hex_bytes, 16)
                         except ValueError as e:
                             # One of the hex characters was likely invalid.
                             # Wrap the ValueError so that we can provide a
                             # byte offset in the error.
                             self._index = read_idx
-                            self._error(str(e))
+                            self._error(e, offset=-2)
                     else:
                         # escape char preceding anything other than the chars
                         # in _escaped just results in that same char without
@@ -477,9 +482,9 @@ class LLSDBaseParser(object):
 
             insert_idx += 1
 
+        # Sync our local read index with the canonical one
+        self._index = read_idx
         try:
-            # Sync our local read index with the canonical one
-            self._index = read_idx
             # Slice off only what we used of the working decode buffer
             return decode_buff[:insert_idx].decode('utf-8')
         except UnicodeDecodeError as exc:
