@@ -31,7 +31,7 @@ jobs:
 
       - name: Determine pyenv
         id: pyenv
-        run: echo "::set-output name=value::py$(echo $PYTHON | tr -d '.')"
+        run: echo "value=py$(echo $PYTHON | tr -d '.')" >> $GITHUB_OUTPUT
 
       - name: Run tests
         env:
