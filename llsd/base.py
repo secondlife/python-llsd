@@ -141,6 +141,19 @@ else:
             return fmt
 
 
+class PY3SemanticBytes(BytesType):
+    """Wrapper to make `buffer[n]` return an integer like in Py3"""
+    __slots__ = []
+
+    def __getitem__(self, item):
+        ret = super(PY3SemanticBytes, self).__getitem__(item)
+        # `buffer[n]` should return an integer, but slice syntax like
+        # `buffer[n:n+1]` should still return a `Bytes` object as before.
+        if is_integer(item):
+            return ord(ret)
+        return ret
+
+
 def is_integer(o):
     """ portable test if an object is like an int """
     return isinstance(o, IntTypes)
@@ -321,19 +334,6 @@ def _to_python(node):
     return NODE_HANDLERS[node.tag](node)
 
 
-def _hex_as_nybble(hex):
-    "Accepts a single hex character and returns a nybble."
-    if (hex >= b'0') and (hex <= b'9'):
-        return ord(hex) - ord(b'0')
-    elif (hex >= b'a') and (hex <=b'f'):
-        return 10 + ord(hex) - ord(b'a')
-    elif (hex >= b'A') and (hex <=b'F'):
-        return 10 + ord(hex) - ord(b'A')
-    else:
-        raise LLSDParseError('Invalid hex character: %s' % hex)
-
-
-
 class LLSDBaseFormatter(object):
     """
     This base class cannot be instantiated on its own: it assumes a subclass
@@ -366,13 +366,22 @@ class LLSDBaseFormatter(object):
         }
 
 
+_X_ORD = ord(b'x')
+_BACKSLASH_ORD = ord(b'\\')
+_DECODE_BUFF_ALLOC_SIZE = 1024
+
+
 class LLSDBaseParser(object):
     """
     Utility methods useful for parser subclasses.
     """
+    __slots__ = ['_buffer', '_index', '_decode_buff']
+
     def __init__(self):
         self._buffer = b''
-        self._index  = 0
+        self._index = 0
+        # Scratch space for decoding delimited strings
+        self._decode_buff = bytearray(_DECODE_BUFF_ALLOC_SIZE)
 
     def _error(self, message, offset=0):
         try:
@@ -399,53 +408,85 @@ class LLSDBaseParser(object):
 
     # map char following escape char to corresponding character
     _escaped = {
-        b'a': b'\a',
-        b'b': b'\b',
-        b'f': b'\f',
-        b'n': b'\n',
-        b'r': b'\r',
-        b't': b'\t',
-        b'v': b'\v',
+        ord(b'a'): ord(b'\a'),
+        ord(b'b'): ord(b'\b'),
+        ord(b'f'): ord(b'\f'),
+        ord(b'n'): ord(b'\n'),
+        ord(b'r'): ord(b'\r'),
+        ord(b't'): ord(b'\t'),
+        ord(b'v'): ord(b'\v'),
     }
 
     def _parse_string_delim(self, delim):
         "Parse a delimited string."
-        parts = bytearray()
-        found_escape = False
-        found_hex = False
-        found_digit = False
-        byte = 0
+        insert_idx = 0
+        delim_ord = ord(delim)
+        # Preallocate a working buffer for the decoded string output
+        # to avoid allocs in the hot loop.
+        decode_buff = self._decode_buff
+        # Cache these in locals, otherwise we have to perform a lookup on
+        # `self` in the hot loop.
+        buff = self._buffer
+        read_idx = self._index
+        cc = 0
         while True:
-            cc = self._getc()
-            if found_escape:
-                if found_hex:
-                    if found_digit:
-                        found_escape = False
-                        found_hex = False
-                        found_digit = False
-                        byte <<= 4
-                        byte |= _hex_as_nybble(cc)
-                        parts.append(byte)
-                        byte = 0
+            try:
+                cc = buff[read_idx]
+                read_idx += 1
+
+                if cc == _BACKSLASH_ORD:
+                    # Backslash, figure out if this is an \xNN hex escape or
+                    # something like \t
+                    cc = buff[read_idx]
+                    read_idx += 1
+                    if cc == _X_ORD:
+                        # It's a hex escape. char is the value of the two
+                        # following hex nybbles. This slice may result in
+                        # a short read (0 or 1 bytes), but either a
+                        # `ValueError` will be triggered by the first case,
+                        # and the second will cause an `IndexError` on the
+                        # next iteration of the loop.
+                        hex_bytes = buff[read_idx:read_idx + 2]
+                        read_idx += 2
+                        try:
+                            # int() can parse a `bytes` containing hex,
+                            # no explicit `bytes.decode("ascii")` required.
+                            cc = int(hex_bytes, 16)
+                        except ValueError as e:
+                            # One of the hex characters was likely invalid.
+                            # Wrap the ValueError so that we can provide a
+                            # byte offset in the error.
+                            self._index = read_idx
+                            self._error(e, offset=-2)
                     else:
-                        found_digit = True
-                        byte = _hex_as_nybble(cc)
-                elif cc == b'x':
-                    found_hex = True
-                else:
-                    found_escape = False
-                    # escape char preceding anything other than the chars in
-                    # _escaped just results in that same char without the
-                    # escape char
-                    parts.extend(self._escaped.get(cc, cc))
-            elif cc == b'\\':
-                found_escape = True
-            elif cc == delim:
-                break
-            else:
-                parts.extend(cc)
+                        # escape char preceding anything other than the chars
+                        # in _escaped just results in that same char without
+                        # the escape char
+                        cc = self._escaped.get(cc, cc)
+                elif cc == delim_ord:
+                    break
+            except IndexError:
+                # We can be reasonably sure that any IndexErrors inside here
+                # were caused by an out-of-bounds `buff[read_idx]`.
+                self._index = read_idx
+                self._error("Trying to read past end of buffer")
+
+            try:
+                decode_buff[insert_idx] = cc
+            except IndexError:
+                # Oops, that overflowed the decoding buffer, make a
+                # new expanded buffer containing the existing contents.
+                decode_buff = bytearray(decode_buff)
+                decode_buff.extend(b"\x00" * _DECODE_BUFF_ALLOC_SIZE)
+                decode_buff[insert_idx] = cc
+
+            insert_idx += 1
+
+        # Sync our local read index with the canonical one
+        self._index = read_idx
         try:
-            return parts.decode('utf-8')
+            # Slice off only what we used of the working decode buffer
+            return decode_buff[:insert_idx].decode('utf-8')
         except UnicodeDecodeError as exc:
             self._error(exc)
 

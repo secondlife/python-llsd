@@ -507,6 +507,21 @@ class LLSDNotationUnitTest(unittest.TestCase):
         except llsd.LLSDParseError:
             pass
 
+    def testParseNotationUnterminatedString(self):
+        """
+        Test with an unterminated delimited string
+        """
+        self.assertRaises(llsd.LLSDParseError, self.llsd.parse, b"'foo")
+
+    def testParseNotationHexEscapeNoChars(self):
+        self.assertRaises(llsd.LLSDParseError, self.llsd.parse, b"'\\x")
+
+    def testParseNotationHalfTruncatedHex(self):
+        self.assertRaises(llsd.LLSDParseError, self.llsd.parse, b"'\\xf")
+
+    def testParseNotationInvalidHex(self):
+        self.assertRaises(llsd.LLSDParseError, self.llsd.parse, b"'\\xzz'")
+
 
 class LLSDBinaryUnitTest(unittest.TestCase):
     """
