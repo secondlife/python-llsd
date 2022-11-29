@@ -4,7 +4,7 @@ import re
 import uuid
 
 from llsd.base import (_LLSD, B, LLSDBaseFormatter, LLSDBaseParser, LLSDParseError, LLSDSerializationError, UnicodeType,
-                       _format_datestr, _parse_datestr, _str_to_bytes, binary, uri, PY2, is_bytes, PY3SemanticBytes)
+                       _format_datestr, _parse_datestr, _str_to_bytes, binary, uri, PY2, is_bytes, PY3SemanticBytes, matchseq)
 
 _int_regex = re.compile(br"[-+]?\d+")
 _real_regex = re.compile(br"[-+]?(?:(\d+(\.\d*)?|\d*\.\d+)([eE][-+]?\d+)?)|[-+]?inf|[-+]?nan")
@@ -415,6 +415,24 @@ def parse_notation(something):
     This is the basic public interface for parsing llsd+notation.
 
     :param something: The data to parse.
+    :returns: Returns a python object.
+    """
+    # Try to match header, and if matched, skip past it.
+    remainder = match_notation_hdr(something)
+    # If we matched the header, then parse whatever follows, else parse the
+    # original bytes object or stream.
+    return parse_notation_noh(remainder if remainder is not None else something)
+
+
+def match_notation_hdr(something):
+    return matchseq(something, b'<? llsd/notation ?>')
+
+
+def parse_notation_noh(something):
+    """
+    Parse llsd+notation known to be without a header.
+
+    :param something: The data to parse in an indexable sequence.
     :returns: Returns a python object.
     """
     return LLSDNotationParser().parse(something)

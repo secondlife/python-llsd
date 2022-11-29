@@ -3,8 +3,8 @@ import re
 import types
 
 from llsd.base import (_LLSD, ALL_CHARS, B, LLSDBaseFormatter, LLSDParseError, LLSDSerializationError, UnicodeType,
-                       _format_datestr, _str_to_bytes, _to_python, is_unicode)
-from llsd.fastest_elementtree import ElementTreeError, fromstring
+                       _format_datestr, _str_to_bytes, _to_python, is_unicode, matchseq)
+from llsd.fastest_elementtree import ElementTreeError, fromstring, parse as _parse
 
 INVALID_XML_BYTES = b'\x00\x01\x02\x03\x04\x05\x06\x07\x08\x0b\x0c'\
                     b'\x0e\x0f\x10\x11\x12\x13\x14\x15\x16\x17\x18'\
@@ -226,12 +226,6 @@ def format_pretty_xml(something):
     return LLSDXMLPrettyFormatter().format(something)
 
 
-declaration_regex = re.compile(br'^\s*(?:<\?[\x09\x0A\x0D\x20-\x7e]+\?>)|(?:<llsd>)')
-def validate_xml_declaration(something):
-    if not declaration_regex.match(something):
-        raise LLSDParseError("Invalid XML Declaration")
-
-
 def parse_xml(something):
     """
     This is the basic public interface for parsing llsd+xml.
@@ -239,12 +233,43 @@ def parse_xml(something):
     :param something: The data to parse.
     :returns: Returns a python object.
     """
+    # Try to match header, and if matched, skip past it.
+    remainder = match_xml_hdr(something)
+    # If we matched the header, then parse whatever follows, else parse the
+    # original bytes object or stream.
+    return parse_xml_noh(remainder if remainder is not None else something)
+
+
+def match_xml_hdr(something):
+    return matchseq(something, b'<? llsd/xml ?>')
+
+
+def parse_xml_noh(something):
+    """
+    Parse llsd+xml known to be without an <? LLSD/XML ?> header. May still
+    have a normal XML declaration, e.g. <?xml version="1.0" ?>.
+
+    :param something: The data to parse in an indexable sequence.
+    :returns: Returns a python object.
+    """
+    # Python 3.9's xml.etree.ElementTree.fromstring() does not like whitespace
+    # before XML declaration. Since we explicitly test support for that case,
+    # skip initial whitespace.
+    something = matchseq(something, b'')
     try:
-        # validate xml declaration manually until http://bugs.python.org/issue7138 is fixed
-        validate_xml_declaration(something)
-        return _to_python(fromstring(something)[0])
+        if isinstance(something, bytes):
+            element = fromstring(something)
+        else:
+            # file stream
+            element = _parse(something)
     except ElementTreeError as err:
         raise LLSDParseError(*err.args)
+
+    # We expect that the outer-level XML element is <llsd>...</llsd>.
+    if element.tag != 'llsd':
+        raise LLSDParseError("Invalid XML Declaration")
+    # Extract its contents.
+    return _to_python(element[0])
 
 
 _g_xml_formatter = None
