@@ -91,18 +91,23 @@ class LLSDNotationParser(LLSDBaseParser):
             # access works the same as in PY3
             buffer = PY3SemanticBytes(buffer)
 
-        self._buffer = buffer
-        self._index = 0
+        self._reset(buffer)
         return self._parse()
 
     def _get_until(self, delim):
-        start = self._index
-        end = self._buffer.find(delim, start)
-        if end == -1:
+        content = []
+        try:
+            c = self._getc()
+            while c != delim:
+                content.append(c)
+                c = self._getc()
+        except LLSDParseError:
+            # traditionally this function returns None when there's no
+            # subsequent delim within the input buffer
             return None
         else:
-            self._index = end + 1
-            return self._buffer[start:end]
+            # we've already consumed the close delim
+            return b''.join(content)
 
     def _skip_then(self, value):
         # We've already _peek()ed at the current character, which is how we
@@ -111,11 +116,21 @@ class LLSDNotationParser(LLSDBaseParser):
         return value
 
     def _get_re(self, desc, regex, override=None):
-        match = re.match(regex, self._buffer[self._index:])
+        # This is the case for which we introduced _peek(full=False).
+        # Instead of trying to reimplement each of the re patterns passed to
+        # this method as individual operations on _util, peek ahead by a
+        # reasonable amount and directly use re. full=False means we're
+        # willing to accept a result buffer shorter than our lookahead.
+        # You would think we could parse int, real, true or false with fewer
+        # bytes than this, but fuzz testing produces some real humdinger int
+        # values.
+        peek = self._peek(40, full=False)
+        match = regex.match(peek)
         if not match:
             self._error("Invalid %s token" % desc)
         else:
-            self._index += match.end()
+            # skip what we matched
+            self._getc(match.end())
             return override if override is not None else match.group(0)
 
     def _parse(self):

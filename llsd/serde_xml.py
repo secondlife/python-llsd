@@ -261,7 +261,7 @@ def parse_xml_noh(something):
             element = fromstring(something)
         else:
             # file stream
-            element = _parse(something)
+            element = _parse(something).getroot()
     except ElementTreeError as err:
         raise LLSDParseError(*err.args)
 

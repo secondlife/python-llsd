@@ -67,8 +67,7 @@ class LLSDBinaryParser(LLSDBaseParser):
             # We need to wrap this in a helper class so that individual element
             # access works the same as in PY3
             buffer = PY3SemanticBytes(buffer)
-        self._buffer = buffer
-        self._index = 0
+        self._reset(buffer)
         self._keep_binary = not ignore_binary
         try:
             return self._parse()
@@ -119,7 +118,7 @@ class LLSDBinaryParser(LLSDBaseParser):
             cc = self._peek()
         if cc != b']':
             self._error("invalid array close token")
-        self._index += 1
+        self._getc()
         return rv
 
     def _parse_string(self):
