@@ -370,24 +370,31 @@ class LLSDBaseParser(object):
     """
     Utility methods useful for parser subclasses.
     """
-    __slots__ = ['_util', '_decode_buff']
+    __slots__ = ['_error', '_peek_impl', '_getc', '_decode_buff']
+
+    # set True to force StreamUtil implementation even for bytes
+    force_stream = True
 
     def __init__(self):
-        self._util = BytesUtil(b'')
+        self._reset(b'')
         # Scratch space for decoding delimited strings
         self._decode_buff = bytearray(_DECODE_BUFF_ALLOC_SIZE)
 
     def _reset(self, something):
         if isinstance(something, bytes):
-            self._util = BytesUtil(something)
+            util = (StreamUtil(io.BytesIO(something)) if self.force_stream
+                    else BytesUtil(something))
         elif hasattr(something, 'seek'):
-            self._util = StreamUtil(something)
+            util = StreamUtil(something)
         else:
             raise LLSDParseError('Input must either be a bytes object '
                                  'or a seekable binary stream')
-
-    def _error(self, message, offset=0):
-        self._util.error(message, offset)
+        # Instead of indirecting through 'util' on every access, directly
+        # capture its published methods as methods on this instance, but
+        # prepend an underscore to each method name.
+        for attr in dir(util):
+            if not attr.startswith('_'):
+                setattr(self, '_' + attr, getattr(util, attr))
 
     def _peek(self, num=1, full=True):
         # full=True means error if we can't peek ahead num bytes
@@ -397,11 +404,7 @@ class LLSDBaseParser(object):
             # We happen to know that lengths are encoded as 4 bytes, so back
             # off by 4 bytes to try to point the user at the right spot.
             self._error("Invalid length field %d" % num, -4)
-        return self._util.peek(num, full)
-
-    def _getc(self, num=1, full=True):
-        # full=True means error if we can't peek ahead num bytes
-        return self._util.getc(num, full)
+        return self._peek_impl(num, full)
 
     # map char following escape char to corresponding character
     _escaped = {
@@ -423,16 +426,16 @@ class LLSDBaseParser(object):
         decode_buff = self._decode_buff
         # Cache this in locals, otherwise we have to perform a lookup on
         # `self` in the hot loop.
-        util = self._util
+        getc = self._getc
         cc = 0
         while True:
             try:
-                cc = ord(util.getc())
+                cc = ord(getc())
 
                 if cc == _BACKSLASH_ORD:
                     # Backslash, figure out if this is an \xNN hex escape or
                     # something like \t
-                    cc = ord(util.getc())
+                    cc = ord(getc())
                     if cc == _X_ORD:
                         # It's a hex escape. char is the value of the two
                         # following hex nybbles. This slice may result in
@@ -440,7 +443,7 @@ class LLSDBaseParser(object):
                         # `ValueError` will be triggered by the first case,
                         # and the second will cause an `IndexError` on the
                         # next iteration of the loop.
-                        hex_bytes = util.getc(2)
+                        hex_bytes = getc(2)
                         try:
                             # int() can parse a `bytes` containing hex,
                             # no explicit `bytes.decode("ascii")` required.
@@ -498,13 +501,15 @@ class BytesUtil:
             byte = None
         raise LLSDParseError("%s at byte %d: %r" % (message, self._index+offset, byte))
 
-    def peek(self, num, full=True):
+    def peek_impl(self, num, full=True):
+        # full=True means error if we can't peek ahead num bytes
         if full and self._index + num > len(self._buffer):
             self.error("Trying to read past end of buffer")
         return self._buffer[self._index:self._index + num]
 
     def getc(self, num=1, full=True):
-        chars = self.peek(num, full)
+        # full=True means error if we can't read num bytes
+        chars = self.peek_impl(num, full)
         self._index += num
         return chars
 
@@ -520,11 +525,13 @@ class StreamUtil:
 
     def error(self, message, offset=0):
         oldpos = self._stream.tell()
-        self._stream.seek(offset)
+        # 'offset' is relative to current pos
+        self._stream.seek(offset, io.SEEK_CUR)
         raise LLSDParseError("%s at byte %d: %r" % (message, oldpos+offset,
-                                                    self._peek(1, full=False)))
+                                                    self.peek_impl(1, full=False)))
 
-    def peek(self, num, full=True):
+    def peek_impl(self, num, full=True):
+        # full=True means error if we can't peek ahead num bytes
         oldpos = self._stream.tell()
         try:
             return self.getc(num, full)
@@ -532,6 +539,7 @@ class StreamUtil:
             self._stream.seek(oldpos)
 
     def getc(self, num=1, full=True):
+        # full=True means error if we can't read num bytes
         got = self._stream.read(num)
         if full and len(got) < num:
             self.error("Trying to read past end of stream")
