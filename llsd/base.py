@@ -79,12 +79,6 @@ try:
 except NameError:
     UnicodeType = str
 
-# can't just check for NameError: 'bytes' is defined in both Python 2 and 3
-if PY2:
-    BytesType = str
-else:
-    BytesType = bytes
-
 try:
     b'%s' % (b'yes',)
 except TypeError:
@@ -142,7 +136,7 @@ else:
             return fmt
 
 
-class PY3SemanticBytes(BytesType):
+class PY3SemanticBytes(bytes):
     """Wrapper to make `buffer[n]` return an integer like in Py3"""
     __slots__ = []
 
@@ -172,7 +166,7 @@ def is_string(o):
 
 def is_bytes(o):
     """ portable check if an object is an immutable byte array """
-    return isinstance(o, BytesType)
+    return isinstance(o, bytes)
 
 
 #date: d"YYYY-MM-DDTHH:MM:SS.FFFFFFZ"
