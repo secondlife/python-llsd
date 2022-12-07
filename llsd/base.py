@@ -2,6 +2,7 @@ import abc
 import base64
 import binascii
 import datetime
+import io
 import os
 import re
 import sys
@@ -78,12 +79,6 @@ try:
 except NameError:
     UnicodeType = str
 
-# can't just check for NameError: 'bytes' is defined in both Python 2 and 3
-if PY2:
-    BytesType = str
-else:
-    BytesType = bytes
-
 try:
     b'%s' % (b'yes',)
 except TypeError:
@@ -141,7 +136,7 @@ else:
             return fmt
 
 
-class PY3SemanticBytes(BytesType):
+class PY3SemanticBytes(bytes):
     """Wrapper to make `buffer[n]` return an integer like in Py3"""
     __slots__ = []
 
@@ -171,7 +166,7 @@ def is_string(o):
 
 def is_bytes(o):
     """ portable check if an object is an immutable byte array """
-    return isinstance(o, BytesType)
+    return isinstance(o, bytes)
 
 
 #date: d"YYYY-MM-DDTHH:MM:SS.FFFFFFZ"
@@ -375,36 +370,41 @@ class LLSDBaseParser(object):
     """
     Utility methods useful for parser subclasses.
     """
-    __slots__ = ['_buffer', '_index', '_decode_buff']
+    __slots__ = ['_error', '_peek_impl', '_getc', '_decode_buff']
+
+    # set True to force StreamUtil implementation even for bytes
+    force_stream = True
 
     def __init__(self):
-        self._buffer = b''
-        self._index = 0
+        self._reset(b'')
         # Scratch space for decoding delimited strings
         self._decode_buff = bytearray(_DECODE_BUFF_ALLOC_SIZE)
 
-    def _error(self, message, offset=0):
-        try:
-            byte = self._buffer[self._index+offset]
-        except IndexError:
-            byte = None
-        raise LLSDParseError("%s at byte %d: %s" % (message, self._index+offset, byte))
+    def _reset(self, something):
+        if isinstance(something, bytes):
+            util = (StreamUtil(io.BytesIO(something)) if self.force_stream
+                    else BytesUtil(something))
+        elif hasattr(something, 'seek'):
+            util = StreamUtil(something)
+        else:
+            raise LLSDParseError('Input must either be a bytes object '
+                                 'or a seekable binary stream')
+        # Instead of indirecting through 'util' on every access, directly
+        # capture its published methods as methods on this instance, but
+        # prepend an underscore to each method name.
+        for attr in dir(util):
+            if not attr.startswith('_'):
+                setattr(self, '_' + attr, getattr(util, attr))
 
-    def _peek(self, num=1):
+    def _peek(self, num=1, full=True):
+        # full=True means error if we can't peek ahead num bytes
         if num < 0:
             # There aren't many ways this can happen. The likeliest is that
             # we've just read garbage length bytes from a binary input string.
             # We happen to know that lengths are encoded as 4 bytes, so back
             # off by 4 bytes to try to point the user at the right spot.
             self._error("Invalid length field %d" % num, -4)
-        if self._index + num > len(self._buffer):
-            self._error("Trying to read past end of buffer")
-        return self._buffer[self._index:self._index + num]
-
-    def _getc(self, num=1):
-        chars = self._peek(num)
-        self._index += num
-        return chars
+        return self._peek_impl(num, full)
 
     # map char following escape char to corresponding character
     _escaped = {
@@ -424,21 +424,18 @@ class LLSDBaseParser(object):
         # Preallocate a working buffer for the decoded string output
         # to avoid allocs in the hot loop.
         decode_buff = self._decode_buff
-        # Cache these in locals, otherwise we have to perform a lookup on
+        # Cache this in locals, otherwise we have to perform a lookup on
         # `self` in the hot loop.
-        buff = self._buffer
-        read_idx = self._index
+        getc = self._getc
         cc = 0
         while True:
             try:
-                cc = buff[read_idx]
-                read_idx += 1
+                cc = ord(getc())
 
                 if cc == _BACKSLASH_ORD:
                     # Backslash, figure out if this is an \xNN hex escape or
                     # something like \t
-                    cc = buff[read_idx]
-                    read_idx += 1
+                    cc = ord(getc())
                     if cc == _X_ORD:
                         # It's a hex escape. char is the value of the two
                         # following hex nybbles. This slice may result in
@@ -446,8 +443,7 @@ class LLSDBaseParser(object):
                         # `ValueError` will be triggered by the first case,
                         # and the second will cause an `IndexError` on the
                         # next iteration of the loop.
-                        hex_bytes = buff[read_idx:read_idx + 2]
-                        read_idx += 2
+                        hex_bytes = getc(2)
                         try:
                             # int() can parse a `bytes` containing hex,
                             # no explicit `bytes.decode("ascii")` required.
@@ -456,7 +452,6 @@ class LLSDBaseParser(object):
                             # One of the hex characters was likely invalid.
                             # Wrap the ValueError so that we can provide a
                             # byte offset in the error.
-                            self._index = read_idx
                             self._error(e, offset=-2)
                     else:
                         # escape char preceding anything other than the chars
@@ -468,7 +463,6 @@ class LLSDBaseParser(object):
             except IndexError:
                 # We can be reasonably sure that any IndexErrors inside here
                 # were caused by an out-of-bounds `buff[read_idx]`.
-                self._index = read_idx
                 self._error("Trying to read past end of buffer")
 
             try:
@@ -483,7 +477,6 @@ class LLSDBaseParser(object):
             insert_idx += 1
 
         # Sync our local read index with the canonical one
-        self._index = read_idx
         try:
             # Slice off only what we used of the working decode buffer
             return decode_buff[:insert_idx].decode('utf-8')
@@ -491,11 +484,190 @@ class LLSDBaseParser(object):
             self._error(exc)
 
 
+class BytesUtil:
+    """
+    Utility methods implemented on an input bytes object
+    """
+    __slots__ = ['_buffer', '_index']
+
+    def __init__(self, input):
+        self._buffer = input
+        self._index = 0
+
+    def error(self, message, offset=0):
+        try:
+            byte = chr(self._buffer[self._index+offset])
+        except IndexError:
+            byte = None
+        raise LLSDParseError("%s at byte %d: %r" % (message, self._index+offset, byte))
+
+    def peek_impl(self, num, full=True):
+        # full=True means error if we can't peek ahead num bytes
+        if full and self._index + num > len(self._buffer):
+            self.error("Trying to read past end of buffer")
+        return self._buffer[self._index:self._index + num]
+
+    def getc(self, num=1, full=True):
+        # full=True means error if we can't read num bytes
+        chars = self.peek_impl(num, full)
+        self._index += num
+        return chars
+
+
+class StreamUtil:
+    """
+    Utility methods implemented on an input bytes stream
+    """
+    __slots__ = ['_stream']
+
+    def __init__(self, stream):
+        self._stream = stream
+
+    def error(self, message, offset=0):
+        oldpos = self._stream.tell()
+        # 'offset' is relative to current pos
+        self._stream.seek(offset, io.SEEK_CUR)
+        raise LLSDParseError("%s at byte %d: %r" % (message, oldpos+offset,
+                                                    self.peek_impl(1, full=False)))
+
+    def peek_impl(self, num, full=True):
+        # full=True means error if we can't peek ahead num bytes
+        oldpos = self._stream.tell()
+        try:
+            return self.getc(num, full)
+        finally:
+            self._stream.seek(oldpos)
+
+    def getc(self, num=1, full=True):
+        # full=True means error if we can't read num bytes
+        got = self._stream.read(num)
+        if full and len(got) < num:
+            self.error("Trying to read past end of stream")
+        return got
+
+
+def matchseq(something, pattern):
+    """
+    Given a 'something' that's either a bytes object or a seekable binary
+    stream, match bytes object 'pattern' after skipping arbitrary leading
+    whitespace. After successfully matching 'pattern', skip trailing
+    whitespace as well.
+
+    'pattern' is NOT a regular expression, but a bytes string in which each
+    space character represents zero or more whitespace characters. Non-space
+    characters are matched case-insensitively.
+
+    If 'pattern' matches, return 'something' advanced to skip what was
+    matched: for a bytes object, a subrange; for a binary stream, that stream
+    advanced past the last byte examined.
+
+    If 'pattern' does not match, return None and reset the binary stream to
+    its original read position.
+    """
+    return _matchseq(MatchStream.for_(something), pattern)
+
+
 def starts_with(startstr, something):
-    if hasattr(something, 'startswith'):
-        return something.startswith(startstr)
-    else:
-        pos = something.tell()
-        s = something.read(len(startstr))
-        something.seek(pos, os.SEEK_SET)
-        return (s == startstr)
+    """
+    Like matchseq(), except that starts_with() doesn't consume what it
+    matches: it always resets 'something' to initial position, returning True
+    or False depending on whether the 
+    """
+    stream = MatchStream.for_(something)
+    match = _matchseq(stream, startstr)
+    stream.reset()
+    return bool(match)
+
+
+class MatchStream:
+    """
+    Common operations for BytesStream and AnyStream
+    """
+    @staticmethod
+    def for_(something):
+        # We want to treat a bytes object and a stream uniformly
+        return BytesStream(something) if isinstance(something, bytes) else AnyStream(something)
+
+    def next_nonblank(self):
+        c = self.read(1)
+        while c.isspace():
+            c = self.read(1)
+        return c
+
+
+class BytesStream(io.BytesIO, MatchStream):
+    """
+    Wrapper for a bytes object passed to matchseq() to treat as a stream.
+    """
+    def reset(self, offset=0, whence=io.SEEK_SET):
+        # Since matchseq() constructs this BytesStream object, we know its
+        # initial read pointer is 0.
+        self.seek(offset, whence)
+
+    def remainder(self):
+        # return a subset of the caller's original bytes object,
+        # skipping what we've already read
+        return self.getvalue()[self.tell():]
+
+
+class AnyStream(MatchStream):
+    """
+    Wrapper for a stream passed to matchseq() with specific supplemental
+    methods.
+    """
+    def __init__(self, stream):
+        self.stream = stream
+        self.initpos = self.stream.tell()
+
+    def read(self, size):
+        return self.stream.read(size)
+
+    def reset(self, offset=None, whence=io.SEEK_SET):
+        self.stream.seek(self.initpos if offset is None else offset, whence)
+
+    def remainder(self):
+        # return caller's original stream object, with read position advanced
+        return self.stream
+
+
+def _matchseq(stream, pattern):
+    """
+    Given a MatchStream subclass instance 'stream', match bytes object
+    'pattern' after skipping arbitrary leading whitespace. After successfully
+    matching 'pattern', skip trailing whitespace as well.
+
+    'pattern' is NOT a regular expression, but a bytes string in which each
+    space character represents zero or more whitespace characters. Non-space
+    characters are matched case-insensitively.
+
+    If 'pattern' matches, return 'stream' advanced to skip what was matched:
+    for BytesStream, a subrange; for AnyStream, that stream advanced past the
+    last byte examined.
+
+    If 'pattern' does not match, return None and reset the AnyStream to its
+    original read position.
+    """
+    for chunk in pattern.split():
+        # skip leading space before this chunk
+        c = stream.next_nonblank()
+        # if we hit EOF, no match
+        if not c:
+            stream.reset()
+            return None
+        # not EOF: try to match non-empty chunk,
+        # not forgetting that 'c' is a lookahead byte
+        # (split() never produces a zero-length chunk)
+        maybe = c + stream.read(len(chunk)-1)
+        if maybe.lower() != chunk.lower():
+            # mismatch, reset
+            stream.reset()
+            return None
+        # so far so good, back for next chunk
+
+    # here we've matched every chunk, with the read pointer just at the end of
+    # the last matched chunk -- skip trailing space
+    if stream.next_nonblank():
+        # back up one character, i.e. put back the nonblank
+        stream.reset(-1, io.SEEK_CUR)
+    # show caller where we ended up
+    return stream.remainder()

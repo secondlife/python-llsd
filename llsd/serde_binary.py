@@ -4,7 +4,7 @@ import struct
 import uuid
 
 from llsd.base import (_LLSD, LLSDBaseParser, LLSDSerializationError, _str_to_bytes, binary, is_integer, is_string,
-                       starts_with, uri, PY2, is_bytes, PY3SemanticBytes)
+                       matchseq, uri, PY2, is_bytes, PY3SemanticBytes)
 
 
 class LLSDBinaryParser(LLSDBaseParser):
@@ -67,8 +67,7 @@ class LLSDBinaryParser(LLSDBaseParser):
             # We need to wrap this in a helper class so that individual element
             # access works the same as in PY3
             buffer = PY3SemanticBytes(buffer)
-        self._buffer = buffer
-        self._index = 0
+        self._reset(buffer)
         self._keep_binary = not ignore_binary
         try:
             return self._parse()
@@ -119,7 +118,7 @@ class LLSDBinaryParser(LLSDBaseParser):
             cc = self._peek()
         if cc != b']':
             self._error("invalid array close token")
-        self._index += 1
+        self._getc()
         return rv
 
     def _parse_string(self):
@@ -232,9 +231,22 @@ def parse_binary(something):
     :param something: The data to parse in an indexable sequence.
     :returns: Returns a python object.
     """
-    if starts_with(b'<?llsd/binary?>', something):
-        just_binary = something.split(b'\n', 1)[1]
-    else:
-        just_binary = something
-    return LLSDBinaryParser().parse(just_binary)
+    # Try to match header, and if matched, skip past it.
+    remainder = match_binary_hdr(something)
+    # If we matched the header, then parse whatever follows, else parse the
+    # original bytes object or stream.
+    return parse_binary_noh(remainder if remainder is not None else something)
 
+
+def match_binary_hdr(something):
+    return matchseq(something, b'<? llsd/binary ?>')
+
+
+def parse_binary_noh(something):
+    """
+    Parse llsd+binary known to be without a header.
+
+    :param something: The data to parse in an indexable sequence.
+    :returns: Returns a python object.
+    """
+    return LLSDBinaryParser().parse(something)
