@@ -61,7 +61,7 @@ class LLSDNotationUnitTest(unittest.TestCase):
         :Parameters:
         - 'the_string': string to remove the whitespaces.
         """
-        return re.sub(rb'\s', b'', the_string)
+        return re.sub(br'\s', b'', the_string)
 
     def assertNotationRoundtrip(self, py_in, str_in, is_alternate_notation=False):
         """
@@ -330,7 +330,7 @@ class LLSDNotationUnitTest(unittest.TestCase):
         notation3 = b'b16' + b'"' + base64.b16encode(string_data1).strip() + b'"'
         notation4 = b'b16' + b'"' + base64.b16encode(string_data2).strip() + b'"'
         notation5 = b'b85' + b'"<~EHPu*CER),Dg-(AAoDo;+T~>"'
-        notation6 = b'b85' +rb'"<~4E*J.<+0QR+EMI<AKYi.Eb-@U@3B6(AS+(L06_,GBeNFs@3Qh9Bln0&4X*j:@3RmWARR\S@6Peb+s:u@AKX]UEarc*87?OM+ELt*A0>u4+@0gX@q@26G%G]>+D"u%DImm2Cj@Wq05s)~>"'
+        notation6 = b'b85' +br'"<~4E*J.<+0QR+EMI<AKYi.Eb-@U@3B6(AS+(L06_,GBeNFs@3Qh9Bln0&4X*j:@3RmWARR\S@6Peb+s:u@AKX]UEarc*87?OM+ELt*A0>u4+@0gX@q@26G%G]>+D"u%DImm2Cj@Wq05s)~>"'
 
         self.assertNotationRoundtrip(python_binary1, notation1, True)
         self.assertNotationRoundtrip(python_binary2, notation2, True)
@@ -1567,7 +1567,7 @@ class LLSDPythonXMLUnitTest(unittest.TestCase):
         Utility method to remove all the whitespace characters from
         the given string.
         """
-        return re.sub(rb'\s', b'', the_string)
+        return re.sub(br'\s', b'', the_string)
 
     def test_segfault(self):
         for i, badstring in enumerate([
