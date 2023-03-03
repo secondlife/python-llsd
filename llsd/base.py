@@ -370,10 +370,7 @@ class LLSDBaseParser(object):
     """
     Utility methods useful for parser subclasses.
     """
-    __slots__ = ['_error', '_peek_impl', '_getc', '_decode_buff']
-
-    # set True to force StreamUtil implementation even for bytes
-    force_stream = True
+    __slots__ = ['_stream', '_decode_buff']
 
     def __init__(self):
         self._reset(b'')
@@ -382,19 +379,25 @@ class LLSDBaseParser(object):
 
     def _reset(self, something):
         if isinstance(something, bytes):
-            util = (StreamUtil(io.BytesIO(something)) if self.force_stream
-                    else BytesUtil(something))
-        elif hasattr(something, 'seek'):
-            util = StreamUtil(something)
+            # Wrap an incoming bytes string into a stream. If the passed bytes
+            # string is so large that the overhead of copying it into a
+            # BytesIO is significant, advise caller to pass a stream instead.
+            # BytesIO has no peek() method, so wrap it in BufferedReader.
+            self._stream = io.BufferedReader(io.BytesIO(something))
+        elif hasattr(something, 'peek'):
+            # 'something' is already a buffered stream, use directly
+            self._stream = something
         else:
-            raise LLSDParseError('Input must either be a bytes object '
-                                 'or a seekable binary stream')
-        # Instead of indirecting through 'util' on every access, directly
-        # capture its published methods as methods on this instance, but
-        # prepend an underscore to each method name.
-        for attr in dir(util):
-            if not attr.startswith('_'):
-                setattr(self, '_' + attr, getattr(util, attr))
+            # 'something' isn't buffered, wrap in BufferedReader
+            # (let BufferedReader handle the problem of passing an
+            # inappropriate object)
+            self._stream = io.BufferedReader(something)
+
+    def _getc(self, num=1):
+        got = self._stream.read(num)
+        if len(got) < num:
+            self._error("Trying to read past end of stream")
+        return got
 
     def _peek(self, num=1, full=True):
         # full=True means error if we can't peek ahead num bytes
@@ -404,7 +407,28 @@ class LLSDBaseParser(object):
             # We happen to know that lengths are encoded as 4 bytes, so back
             # off by 4 bytes to try to point the user at the right spot.
             self._error("Invalid length field %d" % num, -4)
-        return self._peek_impl(num, full)
+
+        got = self._stream.peek(num)
+        if full and len(got) < num:
+            # Going right to this error is a little iffy:
+            # BufferedReader.peek() does not promise to return the requested
+            # length, but does not clarify the conditions under which it
+            # returns fewer bytes. If this is an actual problem, we could loop
+            # until we have the requested length or EOF -- but the loop must
+            # explicitly seek() past already-peeked data, then reset after.
+            # https://docs.python.org/3/library/io.html#io.BufferedReader.peek
+            self._error("Trying to peek past end of stream")
+
+        # Interestingly, peek() can also return MORE than requested -- but for
+        # our purposes (e.g. ord(peek(1))) it's important to constrain it.
+        return got[:num]
+
+    def _error(self, message, offset=0):
+        oldpos = self._stream.tell()
+        # 'offset' is relative to current pos
+        self._stream.seek(offset, io.SEEK_CUR)
+        raise LLSDParseError("%s at byte %d: %r" %
+                             (message, oldpos+offset, self._peek(1, full=False)))
 
     # map char following escape char to corresponding character
     _escaped = {
@@ -482,68 +506,6 @@ class LLSDBaseParser(object):
             return decode_buff[:insert_idx].decode('utf-8')
         except UnicodeDecodeError as exc:
             self._error(exc)
-
-
-class BytesUtil:
-    """
-    Utility methods implemented on an input bytes object
-    """
-    __slots__ = ['_buffer', '_index']
-
-    def __init__(self, input):
-        self._buffer = input
-        self._index = 0
-
-    def error(self, message, offset=0):
-        try:
-            byte = chr(self._buffer[self._index+offset])
-        except IndexError:
-            byte = None
-        raise LLSDParseError("%s at byte %d: %r" % (message, self._index+offset, byte))
-
-    def peek_impl(self, num, full=True):
-        # full=True means error if we can't peek ahead num bytes
-        if full and self._index + num > len(self._buffer):
-            self.error("Trying to read past end of buffer")
-        return self._buffer[self._index:self._index + num]
-
-    def getc(self, num=1, full=True):
-        # full=True means error if we can't read num bytes
-        chars = self.peek_impl(num, full)
-        self._index += num
-        return chars
-
-
-class StreamUtil:
-    """
-    Utility methods implemented on an input bytes stream
-    """
-    __slots__ = ['_stream']
-
-    def __init__(self, stream):
-        self._stream = stream
-
-    def error(self, message, offset=0):
-        oldpos = self._stream.tell()
-        # 'offset' is relative to current pos
-        self._stream.seek(offset, io.SEEK_CUR)
-        raise LLSDParseError("%s at byte %d: %r" % (message, oldpos+offset,
-                                                    self.peek_impl(1, full=False)))
-
-    def peek_impl(self, num, full=True):
-        # full=True means error if we can't peek ahead num bytes
-        oldpos = self._stream.tell()
-        try:
-            return self.getc(num, full)
-        finally:
-            self._stream.seek(oldpos)
-
-    def getc(self, num=1, full=True):
-        # full=True means error if we can't read num bytes
-        got = self._stream.read(num)
-        if full and len(got) < num:
-            self.error("Trying to read past end of stream")
-        return got
 
 
 def matchseq(something, pattern):
