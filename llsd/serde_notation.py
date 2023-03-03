@@ -3,8 +3,9 @@ import binascii
 import re
 import uuid
 
-from llsd.base import (_LLSD, B, LLSDBaseFormatter, LLSDBaseParser, LLSDParseError, LLSDSerializationError, UnicodeType,
-                       _format_datestr, _parse_datestr, _str_to_bytes, binary, uri, PY2, is_bytes, PY3SemanticBytes, matchseq)
+from llsd.base import (_LLSD, B, LLSDBaseFormatter, LLSDBaseParser, NOTATION_HEADER,
+                       LLSDParseError, LLSDSerializationError, UnicodeType,
+                       _format_datestr, _parse_datestr, _str_to_bytes, binary, uri)
 
 _int_regex = re.compile(br"[-+]?\d+")
 _real_regex = re.compile(br"[-+]?(?:(\d+(\.\d*)?|\d*\.\d+)([eE][-+]?\d+)?)|[-+]?inf|[-+]?nan")
@@ -83,15 +84,12 @@ class LLSDNotationParser(LLSDBaseParser):
         :param ignore_binary: parser throws away data in llsd binary nodes.
         :returns: returns a python object.
         """
-        if buffer == b"":
+        self._reset(buffer)
+
+        # special case for notation: empty binary string means False
+        if not self._stream.peek(1):
             return False
 
-        if PY2 and is_bytes(buffer):
-            # We need to wrap this in a helper class so that individual element
-            # access works the same as in PY3
-            buffer = PY3SemanticBytes(buffer)
-
-        self._reset(buffer)
         return self._parse()
 
     def _get_until(self, delim):
@@ -433,21 +431,18 @@ def parse_notation(something):
     :returns: Returns a python object.
     """
     # Try to match header, and if matched, skip past it.
-    remainder = match_notation_hdr(something)
+    parser = LLSDBaseParser(something)
+    parser.matchseq(NOTATION_HEADER)
     # If we matched the header, then parse whatever follows, else parse the
     # original bytes object or stream.
-    return parse_notation_noh(remainder if remainder is not None else something)
+    return parse_notation_nohdr(parser)
 
 
-def match_notation_hdr(something):
-    return matchseq(something, b'<? llsd/notation ?>')
-
-
-def parse_notation_noh(something):
+def parse_notation_nohdr(baseparser):
     """
     Parse llsd+notation known to be without a header.
 
-    :param something: The data to parse in an indexable sequence.
+    :param baseparser: LLSDBaseParser instance wrapping the data to parse.
     :returns: Returns a python object.
     """
-    return LLSDNotationParser().parse(something)
+    return LLSDNotationParser().parse(baseparser)

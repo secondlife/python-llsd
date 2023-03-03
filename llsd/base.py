@@ -25,6 +25,10 @@ XML_MIME_TYPE = 'application/llsd+xml'
 BINARY_MIME_TYPE = 'application/llsd+binary'
 NOTATION_MIME_TYPE = 'application/llsd+notation'
 
+XML_HEADER = b'<? llsd/xml ?>'
+BINARY_HEADER = b'<? llsd/binary ?>'
+NOTATION_HEADER = b'<? llsd/notation ?>'
+
 ALL_CHARS = str(bytearray(range(256))) if PY2 else bytes(range(256))
 
 
@@ -136,19 +140,6 @@ else:
             return fmt
 
 
-class PY3SemanticBytes(bytes):
-    """Wrapper to make `buffer[n]` return an integer like in Py3"""
-    __slots__ = []
-
-    def __getitem__(self, item):
-        ret = super(PY3SemanticBytes, self).__getitem__(item)
-        # `buffer[n]` should return an integer, but slice syntax like
-        # `buffer[n:n+1]` should still return a `Bytes` object as before.
-        if is_integer(item):
-            return ord(ret)
-        return ret
-
-
 def is_integer(o):
     """ portable test if an object is like an int """
     return isinstance(o, IntTypes)
@@ -162,11 +153,6 @@ def is_unicode(o):
 def is_string(o):
     """ portable check if an object is string-like """
     return isinstance(o, StringTypes)
-
-
-def is_bytes(o):
-    """ portable check if an object is an immutable byte array """
-    return isinstance(o, bytes)
 
 
 #date: d"YYYY-MM-DDTHH:MM:SS.FFFFFFZ"
@@ -372,13 +358,17 @@ class LLSDBaseParser(object):
     """
     __slots__ = ['_stream', '_decode_buff']
 
-    def __init__(self):
-        self._reset(b'')
+    def __init__(self, something=b''):
+        self._reset(something)
         # Scratch space for decoding delimited strings
         self._decode_buff = bytearray(_DECODE_BUFF_ALLOC_SIZE)
 
     def _reset(self, something):
-        if isinstance(something, bytes):
+        if isinstance(something, LLSDBaseParser):
+            # When passed an existing LLSDBaseParser (subclass) instance, just
+            # borrow its existing _stream.
+            self._stream = something._stream
+        elif isinstance(something, bytes):
             # Wrap an incoming bytes string into a stream. If the passed bytes
             # string is so large that the overhead of copying it into a
             # BytesIO is significant, advise caller to pass a stream instead.
@@ -392,6 +382,73 @@ class LLSDBaseParser(object):
             # (let BufferedReader handle the problem of passing an
             # inappropriate object)
             self._stream = io.BufferedReader(something)
+
+    def starts_with(self, pattern):
+        """
+        Like matchseq(), except that starts_with() doesn't consume what it
+        matches: it always resets our input stream to its previous position.
+        """
+        oldpos = self._stream.tell()
+        try:
+            return self.matchseq(pattern)
+        finally:
+            self._stream.seek(oldpos)
+
+    def matchseq(self, pattern):
+        """
+        Match bytes object 'pattern' after skipping arbitrary leading
+        whitespace. After successfully matching 'pattern', skip trailing
+        whitespace as well.
+
+        'pattern' is NOT a regular expression, but a bytes string in which
+        each space character matches zero or more whitespace characters in the
+        stream. Non-space characters are matched case-insensitively.
+
+        If 'pattern' matches, return True and leave our input stream advanced
+        past the last byte examined.
+
+        If 'pattern' does not match, return False and reset our input stream
+        to its previous read position.
+        """
+        oldpos = self._stream.tell()
+        for chunk in pattern.split():
+            # skip leading space before this chunk
+            c = self._next_nonblank()
+            # if we hit EOF, no match
+            if not c:
+                self._stream.seek(oldpos)
+                return False
+            # not EOF: try to match non-empty chunk,
+            # not forgetting that 'c' is a lookahead byte
+            # (split() never produces a zero-length chunk)
+            maybe = c + self._stream.read(len(chunk)-1)
+            if maybe.lower() != chunk.lower():
+                # mismatch, reset
+                self._stream.seek(oldpos)
+                return False
+            # so far so good, back for next chunk
+
+        # here we've matched every chunk, with the read pointer just at the end of
+        # the last matched chunk -- skip trailing space
+        if self._next_nonblank():
+            # back up one character, i.e. put back the nonblank
+            self._stream.seek(-1, io.SEEK_CUR)
+        # success!
+        return True
+
+    def remainder(self):
+        # return a stream object representing the parse input (from last
+        # _reset() call), whose read position is set past scanned input
+        return self._stream
+
+    def _next_nonblank(self):
+        # we directly call read() rather than getc() because our caller is
+        # prepared to handle empty string, meaning EOF
+        # (YES we want the walrus operator)
+        c = self._stream.read(1)
+        while c.isspace():
+            c = self._stream.read(1)
+        return c
 
     def _getc(self, num=1):
         got = self._stream.read(num)
@@ -506,130 +563,3 @@ class LLSDBaseParser(object):
             return decode_buff[:insert_idx].decode('utf-8')
         except UnicodeDecodeError as exc:
             self._error(exc)
-
-
-def matchseq(something, pattern):
-    """
-    Given a 'something' that's either a bytes object or a seekable binary
-    stream, match bytes object 'pattern' after skipping arbitrary leading
-    whitespace. After successfully matching 'pattern', skip trailing
-    whitespace as well.
-
-    'pattern' is NOT a regular expression, but a bytes string in which each
-    space character represents zero or more whitespace characters. Non-space
-    characters are matched case-insensitively.
-
-    If 'pattern' matches, return 'something' advanced to skip what was
-    matched: for a bytes object, a subrange; for a binary stream, that stream
-    advanced past the last byte examined.
-
-    If 'pattern' does not match, return None and reset the binary stream to
-    its original read position.
-    """
-    return _matchseq(MatchStream.for_(something), pattern)
-
-
-def starts_with(startstr, something):
-    """
-    Like matchseq(), except that starts_with() doesn't consume what it
-    matches: it always resets 'something' to initial position, returning True
-    or False depending on whether the 
-    """
-    stream = MatchStream.for_(something)
-    match = _matchseq(stream, startstr)
-    stream.reset()
-    return bool(match)
-
-
-class MatchStream:
-    """
-    Common operations for BytesStream and AnyStream
-    """
-    @staticmethod
-    def for_(something):
-        # We want to treat a bytes object and a stream uniformly
-        return BytesStream(something) if isinstance(something, bytes) else AnyStream(something)
-
-    def next_nonblank(self):
-        c = self.read(1)
-        while c.isspace():
-            c = self.read(1)
-        return c
-
-
-class BytesStream(io.BytesIO, MatchStream):
-    """
-    Wrapper for a bytes object passed to matchseq() to treat as a stream.
-    """
-    def reset(self, offset=0, whence=io.SEEK_SET):
-        # Since matchseq() constructs this BytesStream object, we know its
-        # initial read pointer is 0.
-        self.seek(offset, whence)
-
-    def remainder(self):
-        # return a subset of the caller's original bytes object,
-        # skipping what we've already read
-        return self.getvalue()[self.tell():]
-
-
-class AnyStream(MatchStream):
-    """
-    Wrapper for a stream passed to matchseq() with specific supplemental
-    methods.
-    """
-    def __init__(self, stream):
-        self.stream = stream
-        self.initpos = self.stream.tell()
-
-    def read(self, size):
-        return self.stream.read(size)
-
-    def reset(self, offset=None, whence=io.SEEK_SET):
-        self.stream.seek(self.initpos if offset is None else offset, whence)
-
-    def remainder(self):
-        # return caller's original stream object, with read position advanced
-        return self.stream
-
-
-def _matchseq(stream, pattern):
-    """
-    Given a MatchStream subclass instance 'stream', match bytes object
-    'pattern' after skipping arbitrary leading whitespace. After successfully
-    matching 'pattern', skip trailing whitespace as well.
-
-    'pattern' is NOT a regular expression, but a bytes string in which each
-    space character represents zero or more whitespace characters. Non-space
-    characters are matched case-insensitively.
-
-    If 'pattern' matches, return 'stream' advanced to skip what was matched:
-    for BytesStream, a subrange; for AnyStream, that stream advanced past the
-    last byte examined.
-
-    If 'pattern' does not match, return None and reset the AnyStream to its
-    original read position.
-    """
-    for chunk in pattern.split():
-        # skip leading space before this chunk
-        c = stream.next_nonblank()
-        # if we hit EOF, no match
-        if not c:
-            stream.reset()
-            return None
-        # not EOF: try to match non-empty chunk,
-        # not forgetting that 'c' is a lookahead byte
-        # (split() never produces a zero-length chunk)
-        maybe = c + stream.read(len(chunk)-1)
-        if maybe.lower() != chunk.lower():
-            # mismatch, reset
-            stream.reset()
-            return None
-        # so far so good, back for next chunk
-
-    # here we've matched every chunk, with the read pointer just at the end of
-    # the last matched chunk -- skip trailing space
-    if stream.next_nonblank():
-        # back up one character, i.e. put back the nonblank
-        stream.reset(-1, io.SEEK_CUR)
-    # show caller where we ended up
-    return stream.remainder()

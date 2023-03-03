@@ -7,11 +7,13 @@ available on the Second Life wiki:
 
 http://wiki.secondlife.com/wiki/LLSD
 """
-from llsd.base import (_LLSD, BINARY_MIME_TYPE, NOTATION_MIME_TYPE, XML_MIME_TYPE, LLSDParseError,
-                       LLSDSerializationError, LongType, UnicodeType, binary, starts_with, undef, uri)
-from llsd.serde_binary import LLSDBinaryParser, format_binary, parse_binary, match_binary_hdr, parse_binary_noh
-from llsd.serde_notation import LLSDNotationFormatter, LLSDNotationParser, format_notation, parse_notation, match_notation_hdr, parse_notation_noh
-from llsd.serde_xml import LLSDXMLFormatter, LLSDXMLPrettyFormatter, format_pretty_xml, format_xml, parse_xml, match_xml_hdr, parse_xml_noh
+from llsd.base import (_LLSD, BINARY_MIME_TYPE, NOTATION_MIME_TYPE, XML_MIME_TYPE,
+                       BINARY_HEADER, NOTATION_HEADER, XML_HEADER,
+                       LLSDBaseParser, LLSDParseError, LLSDSerializationError,
+                       LongType, UnicodeType, binary, undef, uri)
+from llsd.serde_binary import LLSDBinaryParser, format_binary, parse_binary, parse_binary_nohdr
+from llsd.serde_notation import LLSDNotationFormatter, LLSDNotationParser, format_notation, parse_notation, parse_notation_nohdr
+from llsd.serde_xml import LLSDXMLFormatter, LLSDXMLPrettyFormatter, format_pretty_xml, format_xml, parse_xml, parse_xml_nohdr
 
 
 def parse(something, mime_type = None):
@@ -38,21 +40,21 @@ def parse(something, mime_type = None):
                     return parser(something)
 
         # no recognized mime type, look for header
-        for matcher, parser in (
-                (match_binary_hdr,   parse_binary_noh),
-                (match_notation_hdr, parse_notation_noh),
-                (match_xml_hdr,      parse_xml_noh),
+        baseparser = LLSDBaseParser(something)
+        for pattern, parser in (
+                (BINARY_HEADER,   parse_binary_nohdr),
+                (NOTATION_HEADER, parse_notation_nohdr),
+                (XML_HEADER,      parse_xml_nohdr),
                 ):
-            remainder = matcher(something)
-            if remainder is not None:
+            if baseparser.matchseq(pattern):
                 # we already saw the header, don't check again
-                return parser(remainder)
+                return parser(baseparser)
 
         # no recognized header -- does content resemble XML?
-        if starts_with(b'<', something):
-            return parse_xml_noh(something)
+        if baseparser.starts_with(b'<'):
+            return parse_xml_nohdr(baseparser)
         else:
-            return parse_notation_noh(something)
+            return parse_notation_nohdr(baseparser)
 
     except KeyError as e:
         raise LLSDParseError('LLSD could not be parsed: %s' % (e,))

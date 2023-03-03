@@ -3,8 +3,8 @@ import datetime
 import struct
 import uuid
 
-from llsd.base import (_LLSD, LLSDBaseParser, LLSDSerializationError, _str_to_bytes, binary, is_integer, is_string,
-                       matchseq, uri, PY2, is_bytes, PY3SemanticBytes)
+from llsd.base import (_LLSD, LLSDBaseParser, LLSDSerializationError, BINARY_HEADER,
+                       _str_to_bytes, binary, is_integer, is_string, uri)
 
 
 class LLSDBinaryParser(LLSDBaseParser):
@@ -63,10 +63,6 @@ class LLSDBinaryParser(LLSDBaseParser):
         :param ignore_binary: parser throws away data in llsd binary nodes.
         :returns: returns a python object.
         """
-        if PY2 and is_bytes(buffer):
-            # We need to wrap this in a helper class so that individual element
-            # access works the same as in PY3
-            buffer = PY3SemanticBytes(buffer)
         self._reset(buffer)
         self._keep_binary = not ignore_binary
         try:
@@ -141,7 +137,7 @@ class LLSDBinaryParser(LLSDBaseParser):
         seconds = struct.unpack("<d", self._getc(8))[0]
         try:
             return datetime.datetime.utcfromtimestamp(seconds)
-        except OverflowError as exc:
+        except (OSError, OverflowError) as exc:
             # A garbage seconds value can cause utcfromtimestamp() to raise
             # OverflowError: timestamp out of range for platform time_t
             self._error(exc, -8)
@@ -156,7 +152,7 @@ def format_binary(something):
    :param something: a python object (typically a dict) to be serialized.
    :returns: Returns a LLSD binary formatted string.
     """
-    return b'<?llsd/binary?>\n' + _format_binary_recurse(something)
+    return BINARY_HEADER + b'\n' + _format_binary_recurse(something)
 
 
 def _format_binary_recurse(something):
@@ -232,21 +228,18 @@ def parse_binary(something):
     :returns: Returns a python object.
     """
     # Try to match header, and if matched, skip past it.
-    remainder = match_binary_hdr(something)
+    parser = LLSDBaseParser(something)
+    parser.matchseq(BINARY_HEADER)
     # If we matched the header, then parse whatever follows, else parse the
     # original bytes object or stream.
-    return parse_binary_noh(remainder if remainder is not None else something)
+    return parse_binary_nohdr(parser)
 
 
-def match_binary_hdr(something):
-    return matchseq(something, b'<? llsd/binary ?>')
-
-
-def parse_binary_noh(something):
+def parse_binary_nohdr(baseparser):
     """
     Parse llsd+binary known to be without a header.
 
-    :param something: The data to parse in an indexable sequence.
+    :param baseparser: LLSDBaseParser instance wrapping the data to parse.
     :returns: Returns a python object.
     """
-    return LLSDBinaryParser().parse(something)
+    return LLSDBinaryParser().parse(baseparser)

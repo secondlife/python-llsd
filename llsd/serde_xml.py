@@ -2,8 +2,9 @@ import base64
 import re
 import types
 
-from llsd.base import (_LLSD, ALL_CHARS, B, LLSDBaseFormatter, LLSDParseError, LLSDSerializationError, UnicodeType,
-                       _format_datestr, _str_to_bytes, _to_python, is_unicode, matchseq)
+from llsd.base import (_LLSD, ALL_CHARS, B, LLSDBaseParser, LLSDBaseFormatter, XML_HEADER,
+                       LLSDParseError, LLSDSerializationError, UnicodeType,
+                       _format_datestr, _str_to_bytes, _to_python, is_unicode)
 from llsd.fastest_elementtree import ElementTreeError, fromstring, parse as _parse
 
 INVALID_XML_BYTES = b'\x00\x01\x02\x03\x04\x05\x06\x07\x08\x0b\x0c'\
@@ -234,34 +235,27 @@ def parse_xml(something):
     :returns: Returns a python object.
     """
     # Try to match header, and if matched, skip past it.
-    remainder = match_xml_hdr(something)
+    parser = LLSDBaseParser(something)
+    parser.matchseq(XML_HEADER)
     # If we matched the header, then parse whatever follows, else parse the
     # original bytes object or stream.
-    return parse_xml_noh(remainder if remainder is not None else something)
+    return parse_xml_nohdr(parser)
 
 
-def match_xml_hdr(something):
-    return matchseq(something, b'<? llsd/xml ?>')
-
-
-def parse_xml_noh(something):
+def parse_xml_nohdr(baseparser):
     """
     Parse llsd+xml known to be without an <? LLSD/XML ?> header. May still
     have a normal XML declaration, e.g. <?xml version="1.0" ?>.
 
-    :param something: The data to parse in an indexable sequence.
+    :param baseparser: LLSDBaseParser instance wrapping the data to parse.
     :returns: Returns a python object.
     """
     # Python 3.9's xml.etree.ElementTree.fromstring() does not like whitespace
     # before XML declaration. Since we explicitly test support for that case,
     # skip initial whitespace.
-    something = matchseq(something, b'')
+    baseparser.matchseq(b'')
     try:
-        if isinstance(something, bytes):
-            element = fromstring(something)
-        else:
-            # file stream
-            element = _parse(something).getroot()
+        element = _parse(baseparser.remainder()).getroot()
     except ElementTreeError as err:
         raise LLSDParseError(*err.args)
 
