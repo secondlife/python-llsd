@@ -119,10 +119,10 @@ class LLSDNotationParser(LLSDBaseParser):
         # this method as individual operations on _util, peek ahead by a
         # reasonable amount and directly use re. full=False means we're
         # willing to accept a result buffer shorter than our lookahead.
-        # You would think we could parse int, real, true or false with fewer
+        # You would think we could parse int, real, True or False with fewer
         # bytes than this, but fuzz testing produces some real humdinger int
         # values.
-        peek = self._peek(40, full=False)
+        peek = self._peek(80, full=False)
         match = regex.match(peek)
         if not match:
             self._error("Invalid %s token" % desc)
