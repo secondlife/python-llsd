@@ -2,6 +2,7 @@ import abc
 import base64
 import binascii
 import datetime
+import io
 import os
 import re
 import sys
@@ -37,6 +38,8 @@ class _LLSD:
 undef = _LLSD(None)
 
 
+# 'binary' only exists so that a Python 2 caller can distinguish binary data
+# from str data - since in Python 2, (bytes is str).
 if PY2:
     class binary(str):
         "Simple wrapper for llsd.binary data."
@@ -187,18 +190,18 @@ def _str_to_bytes(s):
         return s
 
 
-def _format_datestr(v):
+def _write_datestr(stream, v):
     """
     Formats a datetime or date object into the string format shared by
     xml and notation serializations.
     """
     if not isinstance(v, datetime.date) and not isinstance(v, datetime.datetime):
-        raise LLSDParseError("invalid date string %s passed to date formatter" % v)
+        raise LLSDSerializationError("invalid date string %s passed to date formatter" % v)
 
     if not isinstance(v, datetime.datetime):
         v = datetime.datetime.combine(v, datetime.time(0))
 
-    return _str_to_bytes(v.isoformat() + 'Z')
+    stream.write(_str_to_bytes(v.isoformat() + 'Z'))
 
 
 def _parse_datestr(datestr):
@@ -364,6 +367,19 @@ class LLSDBaseFormatter(object):
             dict:                self.MAP,
             _LLSD:               self.LLSD,
         }
+
+
+    def format(self, something):
+        """
+        Pure Python implementation of the formatter.
+        Format a python object according to the subclass's write() method.
+
+        :param something: A python object (typically a dict) to be serialized.
+        :returns: A serialized bytes object.
+        """
+        stream = io.BytesIO()
+        self.write(stream, something)
+        return stream.getvalue()
 
 
 _X_ORD = ord(b'x')

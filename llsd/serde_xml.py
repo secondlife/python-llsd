@@ -111,18 +111,18 @@ class LLSDXMLFormatter(LLSDBaseFormatter):
             raise LLSDSerializationError(
                 "Cannot serialize unknown type: %s (%s)" % (t, something))
 
-    def _format(self, something):
-        "Pure Python implementation of the formatter."
-        return b'<?xml version="1.0" ?>' + self._elt(b"llsd", self._generate(something))
-
-    def format(self, something):
+    def write(stream, something):
         """
-        Format a python object as application/llsd+xml
+        Serialize a python object to the passed binary 'stream' as
+        application/llsd+xml.
 
+        :param stream: A binary file-like object to which to serialize 'something'.
         :param something: A python object (typically a dict) to be serialized.
-        :returns: Returns an XML formatted string.
         """
-        return self._format(something)
+        stream.write(b'<?xml version="1.0" ?>')
+        # ... mumble self._elt(b"llsd", self._generate(something))
+        raise NotImplementedError('Watch This Space')
+
 
 class LLSDXMLPrettyFormatter(LLSDXMLFormatter):
     """
