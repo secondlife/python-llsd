@@ -3,8 +3,10 @@ import binascii
 import re
 import uuid
 
-from llsd.base import (_LLSD, B, LLSDBaseFormatter, LLSDBaseParser, LLSDParseError, LLSDSerializationError, UnicodeType,
-                       _format_datestr, _parse_datestr, _str_to_bytes, binary, uri, PY2, is_bytes, PY3SemanticBytes)
+from llsd.base import (_LLSD, B, LLSDBaseFormatter, LLSDBaseParser, LLSDParseError,
+                       LLSDSerializationError, UnicodeType,
+                       _format_datestr, _parse_datestr, _str_to_bytes, binary,
+                       uri, PY2, is_bytes, PY3SemanticBytes)
 
 _int_regex = re.compile(br"[-+]?\d+")
 _real_regex = re.compile(br"[-+]?(?:(\d+(\.\d*)?|\d*\.\d+)([eE][-+]?\d+)?)|[-+]?inf|[-+]?nan")
@@ -333,21 +335,16 @@ class LLSDNotationFormatter(LLSDBaseFormatter):
 
     See http://wiki.secondlife.com/wiki/LLSD#Notation_Serialization
     """
-    __slots__ = []
-
     def LLSD(self, v):
         return self._generate(v.thing)
     def UNDEF(self, v):
-        return b'!'
+        self.stream.write(b'!')
     def BOOLEAN(self, v):
-        if v:
-            return b'true'
-        else:
-            return b'false'
+        self.stream.write(b'true' if v else b'false')
     def INTEGER(self, v):
-        return B("i%d") % v
+        self.stream.write(B("i%d") % v)
     def REAL(self, v):
-        return B("r%r") % v
+        self.stream.write(B("r%r") % v)
     def UUID(self, v):
         # latin-1 is the byte-to-byte encoding, mapping \x00-\xFF ->
         # \u0000-\u00FF. It's also the fastest encoding, I believe, from
@@ -357,24 +354,42 @@ class LLSDNotationFormatter(LLSDBaseFormatter):
         # error behavior in case someone passes an invalid hex string, with
         # things other than 0-9a-fA-F, so that they will fail in the UUID
         # decode, rather than with a UnicodeError.
-        return B("u%s") % str(v).encode('latin-1')
+        self.stream.writelines([b"u", str(v).encode('latin-1')])
     def BINARY(self, v):
-        return b'b64"' + base64.b64encode(v).strip() + b'"'
+        self.stream.writelines([b'b64"', base64.b64encode(v).strip(), b'"'])
 
     def STRING(self, v):
-        return B("'%s'") % _str_to_bytes(v).replace(b"\\", b"\\\\").replace(b"'", b"\\'")
+        self.stream.writelines([b"'", self._esc(v), b"'"])
     def URI(self, v):
-        return B('l"%s"') % _str_to_bytes(v).replace(b"\\", b"\\\\").replace(b'"', b'\\"')
+        self.stream.writelines([b'l"', self._esc(v, b'"'), b'"'])
     def DATE(self, v):
-        return B('d"%s"') % _format_datestr(v)
+        self.stream.writelines([b'd"', _format_datestr(v), b'"'])
     def ARRAY(self, v):
-        return B("[%s]") % b','.join([self._generate(item) for item in v])
+        self.stream.write(b'[')
+        delim = b''
+        for item in v:
+            self.stream.write(delim)
+            self._generate(item)
+            delim = b','
+        self.stream.write(b']')
     def MAP(self, v):
-        return B("{%s}") % b','.join([B("'%s':%s") % (_str_to_bytes(UnicodeType(key)).replace(b"\\", b"\\\\").replace(b"'", b"\\'"), self._generate(value))
-             for key, value in v.items()])
+        self.stream.write(b'{')
+        delim = b''
+        for key, value in v.items():
+            self.stream.writelines([delim, b"'", self._esc(UnicodeType(key)), b"':"])
+            self._generate(value)
+            delim = b','
+        self.stream.write(b'}')
+
+    def _esc(self, data, quote=b"'"):
+        return _str_to_bytes(data).replace(b"\\", b"\\\\").replace(quote, b'\\'+quote)
 
     def _generate(self, something):
-        "Generate notation from a single python object."
+        """
+        Serialize a python object to self.stream as application/llsd+notation
+
+        :param something: a python object (typically a dict) to be serialized.
+        """
         t = type(something)
         handler = self.type_map.get(t)
         if handler:
@@ -388,14 +403,8 @@ class LLSDNotationFormatter(LLSDBaseFormatter):
                 raise LLSDSerializationError(
                     "Cannot serialize unknown type: %s (%s)" % (t, something))
 
-    def format(self, something):
-        """
-        Format a python object as application/llsd+notation
-
-        :param something: a python object (typically a dict) to be serialized.
-        :returns: Returns a LLSD notation formatted string.
-        """
-        return self._generate(something)
+    # _write() method is an alias for _generate()
+    _write = _generate
 
 
 def format_notation(something):
@@ -408,6 +417,19 @@ def format_notation(something):
     See http://wiki.secondlife.com/wiki/LLSD#Notation_Serialization
     """
     return LLSDNotationFormatter().format(something)
+
+
+def write_notation(stream, something):
+    """
+    Serialize to passed binary 'stream' a python object 'something' as
+    application/llsd+notation.
+
+    :param stream: a binary stream open for writing.
+    :param something: a python object (typically a dict) to be serialized.
+
+    See http://wiki.secondlife.com/wiki/LLSD#Notation_Serialization
+    """
+    return LLSDNotationFormatter().write(stream, something)
 
 
 def parse_notation(something):
