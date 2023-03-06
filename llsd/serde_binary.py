@@ -1,9 +1,11 @@
 import calendar
 import datetime
+import io
 import struct
 import uuid
 
-from llsd.base import (_LLSD, LLSDBaseParser, LLSDSerializationError, _str_to_bytes, binary, is_integer, is_string,
+from llsd.base import (_LLSD, LLSDBaseParser, LLSDSerializationError,
+                       _str_to_bytes, binary, is_integer, is_string,
                        starts_with, uri, PY2, is_bytes, PY3SemanticBytes)
 
 
@@ -157,65 +159,65 @@ def format_binary(something):
    :param something: a python object (typically a dict) to be serialized.
    :returns: Returns a LLSD binary formatted string.
     """
-    return b'<?llsd/binary?>\n' + _format_binary_recurse(something)
+    stream = io.BytesIO()
+    write_binary(stream, something)
+    return stream.getvalue()
 
 
-def _format_binary_recurse(something):
+def write_binary(stream, something):
+    stream.write(b'<?llsd/binary?>\n')
+    _write_binary_recurse(stream, something)
+
+
+def _write_binary_recurse(stream, something):
     "Binary formatter workhorse."
     def _format_list(something):
-        array_builder = []
-        array_builder.append(b'[' + struct.pack('!i', len(something)))
+        stream.writelines([b'[', struct.pack('!i', len(something))])
         for item in something:
-            array_builder.append(_format_binary_recurse(item))
-        array_builder.append(b']')
-        return b''.join(array_builder)
+            _write_binary_recurse(stream, item)
+        stream.write(b']')
 
     if something is None:
-        return b'!'
+        stream.write(b'!')
     elif isinstance(something, _LLSD):
-        return _format_binary_recurse(something.thing)
+        _write_binary_recurse(stream, something.thing)
     elif isinstance(something, bool):
-        if something:
-            return b'1'
-        else:
-            return b'0'
+        stream.write(b'1' if something else b'0')
     elif is_integer(something):
         try:
-            return b'i' + struct.pack('!i', something)
+            stream.writelines([b'i', struct.pack('!i', something)])
         except (OverflowError, struct.error) as exc:
             raise LLSDSerializationError(str(exc), something)
     elif isinstance(something, float):
         try:
-            return b'r' + struct.pack('!d', something)
+            stream.writelines([b'r', struct.pack('!d', something)])
         except SystemError as exc:
             raise LLSDSerializationError(str(exc), something)
     elif isinstance(something, uuid.UUID):
-        return b'u' + something.bytes
+        stream.writelines([b'u', something.bytes])
     elif isinstance(something, binary):
-        return b'b' + struct.pack('!i', len(something)) + something
+        stream.writelines([b'b', struct.pack('!i', len(something)), something])
     elif is_string(something):
         something = _str_to_bytes(something)
-        return b's' + struct.pack('!i', len(something)) + something
+        stream.writelines([b's', struct.pack('!i', len(something)), something])
     elif isinstance(something, uri):
-        return b'l' + struct.pack('!i', len(something)) + something
+        stream.writelines([b'l', struct.pack('!i', len(something)), something])
     elif isinstance(something, datetime.datetime):
         seconds_since_epoch = calendar.timegm(something.utctimetuple()) \
                               + something.microsecond // 1e6
-        return b'd' + struct.pack('<d', seconds_since_epoch)
+        stream.writelines([b'd', struct.pack('<d', seconds_since_epoch)])
     elif isinstance(something, datetime.date):
         seconds_since_epoch = calendar.timegm(something.timetuple())
-        return b'd' + struct.pack('<d', seconds_since_epoch)
+        stream.writelines([b'd', struct.pack('<d', seconds_since_epoch)])
     elif isinstance(something, (list, tuple)):
-        return _format_list(something)
+        _format_list(something)
     elif isinstance(something, dict):
-        map_builder = []
-        map_builder.append(b'{' + struct.pack('!i', len(something)))
+        stream.writelines([b'{', struct.pack('!i', len(something))])
         for key, value in something.items():
             key = _str_to_bytes(key)
-            map_builder.append(b'k' + struct.pack('!i', len(key)) + key)
-            map_builder.append(_format_binary_recurse(value))
-        map_builder.append(b'}')
-        return b''.join(map_builder)
+            stream.writelines([b'k', struct.pack('!i', len(key)), key])
+            _write_binary_recurse(stream, value)
+        stream.write(b'}')
     else:
         try:
             return _format_list(list(something))
