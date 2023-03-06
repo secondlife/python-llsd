@@ -190,7 +190,7 @@ def _str_to_bytes(s):
         return s
 
 
-def _write_datestr(stream, v):
+def _format_datestr(v):
     """
     Formats a datetime or date object into the string format shared by
     xml and notation serializations.
@@ -201,7 +201,7 @@ def _write_datestr(stream, v):
     if not isinstance(v, datetime.datetime):
         v = datetime.datetime.combine(v, datetime.time(0))
 
-    stream.write(_str_to_bytes(v.isoformat() + 'Z'))
+    return _str_to_bytes(v.isoformat() + 'Z')
 
 
 def _parse_datestr(datestr):
