@@ -2,7 +2,8 @@ import base64
 import re
 import types
 
-from llsd.base import (_LLSD, ALL_CHARS, B, LLSDBaseFormatter, LLSDParseError, LLSDSerializationError, UnicodeType,
+from llsd.base import (_LLSD, ALL_CHARS, LLSDBaseFormatter, LLSDParseError,
+                       LLSDSerializationError, UnicodeType,
                        _format_datestr, _str_to_bytes, _to_python, is_unicode)
 from llsd.fastest_elementtree import ElementTreeError, fromstring
 
@@ -26,33 +27,44 @@ def remove_invalid_xml_bytes(b):
 
 class LLSDXMLFormatter(LLSDBaseFormatter):
     """
-    Class which implements LLSD XML serialization..
+    Class which implements LLSD XML serialization.
 
     http://wiki.secondlife.com/wiki/LLSD#XML_Serialization
 
-    This class wraps both a pure python and c-extension for formatting
-    a limited subset of python objects as application/llsd+xml. You do
-    not generally need to make an instance of this object since the
-    module level format_xml is the most convenient interface to this
-    functionality.
+    This class serializes a limited subset of python objects as
+    application/llsd+xml. You do not generally need to make an instance of
+    this class since the module level format_xml() is the most convenient
+    interface to this functionality.
     """
-    __slots__ = []
+    __slots__ = ['stream']
 
     def _elt(self, name, contents=None):
-        "Serialize a single element."
+        """
+        Serialize a single element.
+
+        If 'contents' is omitted, write <name/>.
+        If 'contents' is bytes, write <name>contents</name>.
+        If 'contents' is str, write <name>contents.encode('utf8')</name>.
+        If 'contents' is callable, write <name>, call contents(), write </name>.
+        """
         if not contents:
-            return B("<%s />") % (name,)
+            self.stream.writelines([b"<", name, b" />"])
         else:
-            return B("<%s>%s</%s>") % (name, _str_to_bytes(contents), name)
+            self.stream.writelines([b"<", name, b">"])
+            if callable(contents):
+                contents()
+            else:
+                self.stream.write(_str_to_bytes(contents))
+            self.stream.writelines([b"</", name, b">"])
 
     def xml_esc(self, v):
         "Escape string or unicode object v for xml output"
 
         # Use is_unicode() instead of is_string() because in python 2, str is
-        # bytes, not unicode, and should not be "encode()"'d. attempts to
+        # bytes, not unicode, and should not be "encode()"d. Attempts to
         # encode("utf-8") a bytes type will result in an implicit
         # decode("ascii") that will throw a UnicodeDecodeError if the string
-        # contains non-ascii characters
+        # contains non-ascii characters.
         if is_unicode(v):
             # we need to drop these invalid characters because they
             # cannot be parsed (and encode() doesn't drop them for us)
@@ -91,18 +103,17 @@ class LLSDXMLFormatter(LLSDBaseFormatter):
     def ARRAY(self, v):
         return self._elt(
             b'array',
-            b''.join([self._generate(item) for item in v]))
+            lambda: [self._generate(item) for item in v])
     def MAP(self, v):
         return self._elt(
             b'map',
-            b''.join([B("%s%s") % (self._elt(b'key', self.xml_esc(UnicodeType(key))),
-                               self._generate(value))
-             for key, value in v.items()]))
+            lambda: [(self._elt(b'key', self.xml_esc(UnicodeType(key))),
+                      self._generate(value))
+                     for key, value in v.items()])
 
-    typeof = type
     def _generate(self, something):
         "Generate xml from a single python object."
-        t = self.typeof(something)
+        t = type(something)
         if t in self.type_map:
             return self.type_map[t](something)
         elif isinstance(something, _LLSD):
@@ -111,7 +122,7 @@ class LLSDXMLFormatter(LLSDBaseFormatter):
             raise LLSDSerializationError(
                 "Cannot serialize unknown type: %s (%s)" % (t, something))
 
-    def write(stream, something):
+    def write(self, stream, something):
         """
         Serialize a python object to the passed binary 'stream' as
         application/llsd+xml.
@@ -119,9 +130,12 @@ class LLSDXMLFormatter(LLSDBaseFormatter):
         :param stream: A binary file-like object to which to serialize 'something'.
         :param something: A python object (typically a dict) to be serialized.
         """
-        stream.write(b'<?xml version="1.0" ?>')
-        # ... mumble self._elt(b"llsd", self._generate(something))
-        raise NotImplementedError('Watch This Space')
+        self.stream = stream
+        try:
+            stream.write(b'<?xml version="1.0" ?>')
+            self._elt(b"llsd", lambda: self._generate(something))
+        finally:
+            self.stream = None
 
 
 class LLSDXMLPrettyFormatter(LLSDXMLFormatter):
@@ -142,13 +156,6 @@ class LLSDXMLPrettyFormatter(LLSDXMLFormatter):
         # Call the super class constructor so that we have the type map
         super(LLSDXMLPrettyFormatter, self).__init__()
 
-        # Override the type map to use our specialized formatters to
-        # emit the pretty output.
-        self.type_map[list] = self.PRETTY_ARRAY
-        self.type_map[tuple] = self.PRETTY_ARRAY
-        self.type_map[types.GeneratorType] = self.PRETTY_ARRAY,
-        self.type_map[dict] = self.PRETTY_MAP
-
         # Private data used for indentation.
         self._indent_level = 1
         if indent_atom is None:
@@ -157,54 +164,52 @@ class LLSDXMLPrettyFormatter(LLSDXMLFormatter):
             self._indent_atom = indent_atom
 
     def _indent(self):
-        "Return an indentation based on the atom and indentation level."
-        return self._indent_atom * self._indent_level
+        "Write an indentation based on the atom and indentation level."
+        self.stream.writelines([self._indent_atom] * self._indent_level)
 
-    def PRETTY_ARRAY(self, v):
+    def ARRAY(self, v):
         "Recursively format an array with pretty turned on."
-        rv = []
-        rv.append(b'<array>\n')
-        self._indent_level = self._indent_level + 1
-        rv.extend([B("%s%s\n") %
-                   (self._indent(),
-                    self._generate(item))
-                   for item in v])
-        self._indent_level = self._indent_level - 1
-        rv.append(self._indent())
-        rv.append(b'</array>')
-        return b''.join(rv)
+        self.stream.write(b'<array>\n')
+        self._indent_level += 1
+        for item in v:
+            self._indent()
+            self._generate(item)
+            self.stream.write(b'\n')
+        self._indent_level -= 1
+        self._indent()
+        self.stream.write(b'</array>')
 
-    def PRETTY_MAP(self, v):
+    def MAP(self, v):
         "Recursively format a map with pretty turned on."
-        rv = []
-        rv.append(b'<map>\n')
-        self._indent_level = self._indent_level + 1
-        # list of keys
-        keys = list(v)
-        keys.sort()
-        rv.extend([B("%s%s\n%s%s\n") %
-                   (self._indent(),
-                    self._elt(b'key', UnicodeType(key)),
-                    self._indent(),
-                    self._generate(v[key]))
-                   for key in keys])
-        self._indent_level = self._indent_level - 1
-        rv.append(self._indent())
-        rv.append(b'</map>')
-        return b''.join(rv)
+        self.stream.write(b'<map>\n')
+        self._indent_level += 1
+        # sorted list of keys
+        for key in sorted(v):
+            self._indent()
+            self._elt(b'key', UnicodeType(key))
+            self.stream.write(b'\n')
+            self._indent()
+            self._generate(v[key])
+            self.stream.write(b'\n')
+        self._indent_level -= 1
+        self._indent()
+        self.stream.write(b'</map>')
 
-    def format(self, something):
+    def write(self, stream, something):
         """
-        Format a python object as application/llsd+xml
+        Serialize to passed 'stream' the python object 'something' as 'pretty'
+        application/llsd+xml.
 
+        :param stream: a binary stream open for writing.
         :param something: a python object (typically a dict) to be serialized.
-        :returns: Returns an XML formatted string.
         """
-        data = []
-        data.append(b'<?xml version="1.0" ?>\n<llsd>')
-        data.append(self._generate(something))
-        data.append(b'</llsd>\n')
-        return b'\n'.join(data)
+        self.stream = stream
+        try:
+            stream.write(b'<?xml version="1.0" ?>\n<llsd>')
+            self._generate(something)
+            stream.write(b'</llsd>\n')
+        finally:
+            self.stream = None
 
 
 def format_pretty_xml(something):
@@ -224,6 +229,26 @@ def format_pretty_xml(something):
     reading.
     """
     return LLSDXMLPrettyFormatter().format(something)
+
+
+def write_pretty_xml(stream, something):
+    """
+    Serialize to passed 'stream' the python object 'something' as 'pretty'
+    application/llsd+xml.
+
+    :param stream: a binary stream open for writing.
+    :param something: a python object (typically a dict) to be serialized.
+
+    See http://wiki.secondlife.com/wiki/LLSD#XML_Serialization
+
+    The output conforms to the LLSD DTD, unlike the output from the
+    standard python xml.dom DOM::toprettyxml() method which does not
+    preserve significant whitespace.
+    This function is not necessarily suited for serializing very large
+    objects. It sorts on dict (llsd map) keys alphabetically to ease human
+    reading.
+    """
+    return LLSDXMLPrettyFormatter().write(stream, something)
 
 
 declaration_regex = re.compile(br'^\s*(?:<\?[\x09\x0A\x0D\x20-\x7e]+\?>)|(?:<llsd>)')
@@ -248,6 +273,13 @@ def parse_xml(something):
 
 
 _g_xml_formatter = None
+def _get_xml_formatter():
+    global _g_xml_formatter
+    if _g_xml_formatter is None:
+        _g_xml_formatter = LLSDXMLFormatter()
+    return _g_xml_formatter
+
+
 def format_xml(something):
     """
     Format a python object as application/llsd+xml
@@ -255,12 +287,19 @@ def format_xml(something):
     :param something: a python object (typically a dict) to be serialized.
     :returns: Returns an XML formatted string.
 
-    Ssee http://wiki.secondlife.com/wiki/LLSD#XML_Serialization
-
-    This function wraps both a pure python and c-extension for formatting
-    a limited subset of python objects as application/llsd+xml.
+    See http://wiki.secondlife.com/wiki/LLSD#XML_Serialization
     """
-    global _g_xml_formatter
-    if _g_xml_formatter is None:
-        _g_xml_formatter = LLSDXMLFormatter()
-    return _g_xml_formatter.format(something)
+    return _get_xml_formatter().format(something)
+
+
+def write_xml(stream, something):
+    """
+    Serialize to passed 'stream' the python object 'something' as
+    application/llsd+xml.
+
+    :param stream: a binary stream open for writing.
+    :param something: a python object (typically a dict) to be serialized.
+
+    See http://wiki.secondlife.com/wiki/LLSD#XML_Serialization
+    """
+    return _get_xml_formatter().write(stream, something)
