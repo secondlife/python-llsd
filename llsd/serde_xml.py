@@ -36,8 +36,6 @@ class LLSDXMLFormatter(LLSDBaseFormatter):
     this class since the module level format_xml() is the most convenient
     interface to this functionality.
     """
-    __slots__ = ['stream']
-
     def _elt(self, name, contents=None):
         """
         Serialize a single element.
@@ -122,20 +120,14 @@ class LLSDXMLFormatter(LLSDBaseFormatter):
             raise LLSDSerializationError(
                 "Cannot serialize unknown type: %s (%s)" % (t, something))
 
-    def write(self, stream, something):
+    def _write(self, something):
         """
-        Serialize a python object to the passed binary 'stream' as
-        application/llsd+xml.
+        Serialize a python object to self.stream as application/llsd+xml.
 
-        :param stream: A binary file-like object to which to serialize 'something'.
         :param something: A python object (typically a dict) to be serialized.
         """
-        self.stream = stream
-        try:
-            stream.write(b'<?xml version="1.0" ?>')
-            self._elt(b"llsd", lambda: self._generate(something))
-        finally:
-            self.stream = None
+        self.stream.write(b'<?xml version="1.0" ?>')
+        self._elt(b"llsd", lambda: self._generate(something))
 
 
 class LLSDXMLPrettyFormatter(LLSDXMLFormatter):
@@ -195,21 +187,15 @@ class LLSDXMLPrettyFormatter(LLSDXMLFormatter):
         self._indent()
         self.stream.write(b'</map>')
 
-    def write(self, stream, something):
+    def _write(self, something):
         """
-        Serialize to passed 'stream' the python object 'something' as 'pretty'
-        application/llsd+xml.
+        Serialize a python object to self.stream as 'pretty' application/llsd+xml.
 
-        :param stream: a binary stream open for writing.
         :param something: a python object (typically a dict) to be serialized.
         """
-        self.stream = stream
-        try:
-            stream.write(b'<?xml version="1.0" ?>\n<llsd>')
-            self._generate(something)
-            stream.write(b'</llsd>\n')
-        finally:
-            self.stream = None
+        self.stream.write(b'<?xml version="1.0" ?>\n<llsd>')
+        self._generate(something)
+        self.stream.write(b'</llsd>\n')
 
 
 def format_pretty_xml(something):

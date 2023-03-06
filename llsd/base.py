@@ -344,8 +344,11 @@ class LLSDBaseFormatter(object):
     role of this base class is to provide self.type_map based on the methods
     defined in its subclass.
     """
+    __slots__ = ['stream', 'type_map']
+
     def __init__(self):
         "Construct a new formatter dispatch table."
+        self.stream = None
         self.type_map = {
             type(None):          self.UNDEF,
             undef:               self.UNDEF,
@@ -372,7 +375,7 @@ class LLSDBaseFormatter(object):
     def format(self, something):
         """
         Pure Python implementation of the formatter.
-        Format a python object according to the subclass's write() method.
+        Format a python object according to subclass formatting.
 
         :param something: A python object (typically a dict) to be serialized.
         :returns: A serialized bytes object.
@@ -380,6 +383,20 @@ class LLSDBaseFormatter(object):
         stream = io.BytesIO()
         self.write(stream, something)
         return stream.getvalue()
+
+    def write(self, stream, something):
+        """
+        Serialize a python object to the passed binary 'stream' according to
+        subclass formatting.
+
+        :param stream: A binary file-like object to which to serialize 'something'.
+        :param something: A python object (typically a dict) to be serialized.
+        """
+        self.stream = stream
+        try:
+            return self._write(something)
+        finally:
+            self.stream = None
 
 
 _X_ORD = ord(b'x')
