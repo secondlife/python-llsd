@@ -4,9 +4,8 @@ import io
 import struct
 import uuid
 
-from llsd.base import (_LLSD, LLSDBaseParser, LLSDSerializationError,
-                       _str_to_bytes, binary, is_integer, is_string,
-                       starts_with, uri, PY2, is_bytes, PY3SemanticBytes)
+from llsd.base import (_LLSD, LLSDBaseParser, LLSDSerializationError, BINARY_HEADER,
+                       _str_to_bytes, binary, is_integer, is_string, uri)
 
 
 class LLSDBinaryParser(LLSDBaseParser):
@@ -65,12 +64,7 @@ class LLSDBinaryParser(LLSDBaseParser):
         :param ignore_binary: parser throws away data in llsd binary nodes.
         :returns: returns a python object.
         """
-        if PY2 and is_bytes(buffer):
-            # We need to wrap this in a helper class so that individual element
-            # access works the same as in PY3
-            buffer = PY3SemanticBytes(buffer)
-        self._buffer = buffer
-        self._index = 0
+        self._reset(buffer)
         self._keep_binary = not ignore_binary
         try:
             return self._parse()
@@ -121,7 +115,7 @@ class LLSDBinaryParser(LLSDBaseParser):
             cc = self._peek()
         if cc != b']':
             self._error("invalid array close token")
-        self._index += 1
+        self._getc()
         return rv
 
     def _parse_string(self):
@@ -144,7 +138,7 @@ class LLSDBinaryParser(LLSDBaseParser):
         seconds = struct.unpack("<d", self._getc(8))[0]
         try:
             return datetime.datetime.utcfromtimestamp(seconds)
-        except OverflowError as exc:
+        except (OSError, OverflowError) as exc:
             # A garbage seconds value can cause utcfromtimestamp() to raise
             # OverflowError: timestamp out of range for platform time_t
             self._error(exc, -8)
@@ -234,9 +228,19 @@ def parse_binary(something):
     :param something: The data to parse in an indexable sequence.
     :returns: Returns a python object.
     """
-    if starts_with(b'<?llsd/binary?>', something):
-        just_binary = something.split(b'\n', 1)[1]
-    else:
-        just_binary = something
-    return LLSDBinaryParser().parse(just_binary)
+    # Try to match header, and if matched, skip past it.
+    parser = LLSDBaseParser(something)
+    parser.matchseq(BINARY_HEADER)
+    # If we matched the header, then parse whatever follows, else parse the
+    # original bytes object or stream.
+    return parse_binary_nohdr(parser)
 
+
+def parse_binary_nohdr(baseparser):
+    """
+    Parse llsd+binary known to be without a header.
+
+    :param baseparser: LLSDBaseParser instance wrapping the data to parse.
+    :returns: Returns a python object.
+    """
+    return LLSDBinaryParser().parse(baseparser)

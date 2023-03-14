@@ -3,10 +3,9 @@ import binascii
 import re
 import uuid
 
-from llsd.base import (_LLSD, B, LLSDBaseFormatter, LLSDBaseParser, LLSDParseError,
-                       LLSDSerializationError, UnicodeType,
-                       _format_datestr, _parse_datestr, _str_to_bytes, binary,
-                       uri, PY2, is_bytes, PY3SemanticBytes)
+from llsd.base import (_LLSD, B, LLSDBaseFormatter, LLSDBaseParser, NOTATION_HEADER,
+                       LLSDParseError, LLSDSerializationError, UnicodeType,
+                       _format_datestr, _parse_datestr, _str_to_bytes, binary, uri)
 
 _int_regex = re.compile(br"[-+]?\d+")
 _real_regex = re.compile(br"[-+]?(?:(\d+(\.\d*)?|\d*\.\d+)([eE][-+]?\d+)?)|[-+]?inf|[-+]?nan")
@@ -85,26 +84,28 @@ class LLSDNotationParser(LLSDBaseParser):
         :param ignore_binary: parser throws away data in llsd binary nodes.
         :returns: returns a python object.
         """
-        if buffer == b"":
+        self._reset(buffer)
+
+        # special case for notation: empty binary string means False
+        if not self._stream.peek(1):
             return False
 
-        if PY2 and is_bytes(buffer):
-            # We need to wrap this in a helper class so that individual element
-            # access works the same as in PY3
-            buffer = PY3SemanticBytes(buffer)
-
-        self._buffer = buffer
-        self._index = 0
         return self._parse()
 
     def _get_until(self, delim):
-        start = self._index
-        end = self._buffer.find(delim, start)
-        if end == -1:
+        content = []
+        try:
+            c = self._getc()
+            while c != delim:
+                content.append(c)
+                c = self._getc()
+        except LLSDParseError:
+            # traditionally this function returns None when there's no
+            # subsequent delim within the input buffer
             return None
         else:
-            self._index = end + 1
-            return self._buffer[start:end]
+            # we've already consumed the close delim
+            return b''.join(content)
 
     def _skip_then(self, value):
         # We've already _peek()ed at the current character, which is how we
@@ -113,11 +114,21 @@ class LLSDNotationParser(LLSDBaseParser):
         return value
 
     def _get_re(self, desc, regex, override=None):
-        match = re.match(regex, self._buffer[self._index:])
+        # This is the case for which we introduced _peek(full=False).
+        # Instead of trying to reimplement each of the re patterns passed to
+        # this method as individual operations on _util, peek ahead by a
+        # reasonable amount and directly use re. full=False means we're
+        # willing to accept a result buffer shorter than our lookahead.
+        # You would think we could parse int, real, True or False with fewer
+        # bytes than this, but fuzz testing produces some real humdinger int
+        # values.
+        peek = self._peek(80, full=False)
+        match = regex.match(peek)
         if not match:
             self._error("Invalid %s token" % desc)
         else:
-            self._index += match.end()
+            # skip what we matched
+            self._getc(match.end())
             return override if override is not None else match.group(0)
 
     def _parse(self):
@@ -432,6 +443,19 @@ def write_notation(stream, something):
     return LLSDNotationFormatter().write(stream, something)
 
 
+def write_notation(stream, something):
+    """
+    Serialize to passed binary 'stream' a python object 'something' as
+    application/llsd+notation.
+
+    :param stream: a binary stream open for writing.
+    :param something: a python object (typically a dict) to be serialized.
+
+    See http://wiki.secondlife.com/wiki/LLSD#Notation_Serialization
+    """
+    return LLSDNotationFormatter().write(stream, something)
+
+
 def parse_notation(something):
     """
     This is the basic public interface for parsing llsd+notation.
@@ -439,4 +463,19 @@ def parse_notation(something):
     :param something: The data to parse.
     :returns: Returns a python object.
     """
-    return LLSDNotationParser().parse(something)
+    # Try to match header, and if matched, skip past it.
+    parser = LLSDBaseParser(something)
+    parser.matchseq(NOTATION_HEADER)
+    # If we matched the header, then parse whatever follows, else parse the
+    # original bytes object or stream.
+    return parse_notation_nohdr(parser)
+
+
+def parse_notation_nohdr(baseparser):
+    """
+    Parse llsd+notation known to be without a header.
+
+    :param baseparser: LLSDBaseParser instance wrapping the data to parse.
+    :returns: Returns a python object.
+    """
+    return LLSDNotationParser().parse(baseparser)
