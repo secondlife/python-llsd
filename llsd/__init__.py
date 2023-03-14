@@ -7,40 +7,55 @@ available on the Second Life wiki:
 
 http://wiki.secondlife.com/wiki/LLSD
 """
-from llsd.base import (_LLSD, BINARY_MIME_TYPE, NOTATION_MIME_TYPE, XML_MIME_TYPE, LLSDParseError,
-                       LLSDSerializationError, LongType, UnicodeType, binary, starts_with, undef, uri)
-from llsd.serde_binary import LLSDBinaryParser, format_binary, parse_binary
-from llsd.serde_notation import LLSDNotationFormatter, LLSDNotationParser, format_notation, parse_notation
-from llsd.serde_xml import LLSDXMLFormatter, LLSDXMLPrettyFormatter, format_pretty_xml, format_xml, parse_xml
+from llsd.base import (_LLSD, BINARY_MIME_TYPE, NOTATION_MIME_TYPE, XML_MIME_TYPE,
+                       BINARY_HEADER, NOTATION_HEADER, XML_HEADER,
+                       LLSDBaseParser, LLSDParseError, LLSDSerializationError,
+                       LongType, UnicodeType, binary, undef, uri)
+from llsd.serde_binary import LLSDBinaryParser, format_binary, parse_binary, parse_binary_nohdr
+from llsd.serde_notation import LLSDNotationFormatter, LLSDNotationParser, format_notation, parse_notation, parse_notation_nohdr
+from llsd.serde_xml import LLSDXMLFormatter, LLSDXMLPrettyFormatter, format_pretty_xml, format_xml, parse_xml, parse_xml_nohdr
 
 
 def parse(something, mime_type = None):
     """
     This is the basic public interface for parsing llsd.
 
-    :param something: The data to parse. This is expected to be bytes, not strings
+    :param something: The data to parse. This is expected to be bytes, not
+           strings, or a byte stream.
     :param mime_type: The mime_type of the data if it is known.
     :returns: Returns a python object.
 
     Python 3 Note: when reading LLSD from a file, use open()'s 'rb' mode explicitly
     """
-    if mime_type in (XML_MIME_TYPE, 'application/llsd'):
-        return parse_xml(something)
-    elif mime_type == BINARY_MIME_TYPE:
-        return parse_binary(something)
-    elif mime_type == NOTATION_MIME_TYPE:
-        return parse_notation(something)
-    #elif content_type == 'application/json':
-    #    return parse_notation(something)
     try:
-        something = something.lstrip()   #remove any pre-trailing whitespace
-        if starts_with(b'<?llsd/binary?>', something):
-            return parse_binary(something)
-        # This should be better.
-        elif starts_with(b'<', something):
-            return parse_xml(something)
+        if mime_type:
+            # explicit mime_type -- 'something' may or may not also have a header
+            for mime_types, parser in (
+                    ({XML_MIME_TYPE, 'application/llsd'}, parse_xml),
+                    ({BINARY_MIME_TYPE},                  parse_binary),
+                    ({NOTATION_MIME_TYPE},                parse_notation),
+##                  ({'application/json'},                parse_notation),
+                    ):
+                if mime_type.lower() in mime_types:
+                    return parser(something)
+
+        # no recognized mime type, look for header
+        baseparser = LLSDBaseParser(something)
+        for pattern, parser in (
+                (BINARY_HEADER,   parse_binary_nohdr),
+                (NOTATION_HEADER, parse_notation_nohdr),
+                (XML_HEADER,      parse_xml_nohdr),
+                ):
+            if baseparser.matchseq(pattern):
+                # we already saw the header, don't check again
+                return parser(baseparser)
+
+        # no recognized header -- does content resemble XML?
+        if baseparser.starts_with(b'<'):
+            return parse_xml_nohdr(baseparser)
         else:
-            return parse_notation(something)
+            return parse_notation_nohdr(baseparser)
+
     except KeyError as e:
         raise LLSDParseError('LLSD could not be parsed: %s' % (e,))
     except TypeError as e:
