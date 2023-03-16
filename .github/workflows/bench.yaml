@@ -2,6 +2,8 @@ name: Benchmark
 
 on:
   pull_request:
+  push:
+    branches: [main]
 
 permissions:
   contents: write
@@ -23,13 +25,14 @@ jobs:
           pip install .[dev] 
           pytest tests/bench.py --benchmark-json benchmark.json
 
-      - name: Store results
+      - name: Report results
         uses: benchmark-action/github-action-benchmark@v1
         with:
           name: Python Benchmarks
           tool: pytest
           output-file-path: benchmark.json
           github-token: ${{ secrets.GITHUB_TOKEN }}
-          auto-push: true
+          # Only update results if they are from main
+          auto-push: ${{ github.ref == 'refs/heads/main' }}
           alert-threshold: "110%"
           comment-on-alert: true
