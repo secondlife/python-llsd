@@ -4,7 +4,7 @@
 
 Official python serialization library for [Linden Lab Structured Data (LLSD)][llsd].
 
-# Use
+## Use
 
 Install **llsd** with pip:
 ```
@@ -35,6 +35,28 @@ data = llsd.parse(data_notation)
 data = llsd.parse(data_binary)
 # >>> {'foo: 'bar'}
 ```
+
+## Develop
+
+Requirements:
+
+- [pre-commit](https://pre-commit.com/)
+
+Set up a venv and install development dependencies:
+```
+python3 -m venv .venv
+. .venv/bin/activate
+pip install .[dev]
+```
+
+Run tests:
+```
+pytest
+```
+
+### Benchmarks
+
+Benchmarks from commits to `main` are published [here](https://secondlife.github.io/python-llsd/dev/bench/).
 
 [llsd]: https://wiki.secondlife.com/wiki/LLSD
 [llbase]: https://pypi.org/project/llbase/
