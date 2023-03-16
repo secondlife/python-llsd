@@ -40,18 +40,18 @@ class LLSDNotationParser(LLSDBaseParser):
             b'{': self._parse_map,
             # array
             b'[': self._parse_array,
-            # undefined -- have to eat the '!'
-            b'!': lambda: self._skip_then(None),
-            # false -- have to eat the '0'
-            b'0': lambda: self._skip_then(False),
-            # true -- have to eat the '1'
-            b'1': lambda: self._skip_then(True),
+            # undefined
+            b'!': lambda cc: None,
+            # false
+            b'0': lambda cc: False,
+            # true
+            b'1': lambda cc: True,
             # false, must check for F|f|false|FALSE
-            b'F': lambda: self._get_re("'false'", _false_regex, False),
-            b'f': lambda: self._get_re("'false'", _false_regex, False),
+            b'F': self._parse_false,
+            b'f': self._parse_false,
             # true, must check for T|t|true|TRUE
-            b'T': lambda: self._get_re("'true'", _true_regex, True),
-            b't': lambda: self._get_re("'true'", _true_regex, True),
+            b'T': self._parse_true,
+            b't': self._parse_true,
             # 'i' = integer
             b'i': self._parse_integer,
             # 'r' = real number
@@ -76,21 +76,23 @@ class LLSDNotationParser(LLSDBaseParser):
         for c, func in _dispatch_dict.items():
             self._dispatch[ord(c)] = func
 
-    def parse(self, buffer, ignore_binary = False):
+    def parse(self, baseparser, ignore_binary = False):
         """
         This is the basic public interface for parsing.
 
-        :param buffer: the notation string to parse.
+        :param baseparser: LLSDBaseParser or subclass holding data to parse.
         :param ignore_binary: parser throws away data in llsd binary nodes.
         :returns: returns a python object.
         """
-        self._reset(buffer)
+        self._reset(baseparser)
 
-        # special case for notation: empty binary string means False
-        if not self._stream.peek(1):
+        # avoid self._getc() here because EOF is an acceptable result
+        cc = self._stream.read(1)
+        # special case for notation: empty input means False
+        if not cc:
             return False
 
-        return self._parse()
+        return self._parse(cc)
 
     def _get_until(self, delim):
         content = []
@@ -107,50 +109,43 @@ class LLSDNotationParser(LLSDBaseParser):
             # we've already consumed the close delim
             return b''.join(content)
 
-    def _skip_then(self, value):
-        # We've already _peek()ed at the current character, which is how we
-        # decided to call this method. Skip past it and return constant value.
-        self._getc()
-        return value
-
-    def _get_re(self, desc, regex, override=None):
+    def _get_re(self, cc, desc, regex, override=None):
         # This is the case for which we introduced _peek(full=False).
         # Instead of trying to reimplement each of the re patterns passed to
-        # this method as individual operations on _util, peek ahead by a
+        # this method as individual operations on _stream, peek ahead by a
         # reasonable amount and directly use re. full=False means we're
         # willing to accept a result buffer shorter than our lookahead.
+        # Don't forget to prepend our lookahead character.
         # You would think we could parse int, real, True or False with fewer
         # bytes than this, but fuzz testing produces some real humdinger int
         # values.
-        peek = self._peek(80, full=False)
+        peek = cc + self._peek(80, full=False)
         match = regex.match(peek)
         if not match:
             self._error("Invalid %s token" % desc)
         else:
-            # skip what we matched
-            self._getc(match.end())
+            # skip what we matched, adjusting for the char we already read
+            self._getc(match.end() - len(cc))
             return override if override is not None else match.group(0)
 
-    def _parse(self):
+    def _parse(self, cc):
         "The notation parser workhorse."
-        cc = self._peek()
         try:
             func = self._dispatch[ord(cc)]
         except IndexError:
             # output error if the token was out of range
             self._error("Invalid notation token")
         else:
-            return func()
+            # pass the lookahead character that selected this func
+            return func(cc)
 
-    def _parse_binary(self):
+    def _parse_binary(self, cc):
         "parse a single binary object."
 
-        self._getc()    # eat the beginning 'b'
-        cc = self._peek()
+        # skip the beginning 'b'
+        cc = self._getc()
         if cc == b'(':
             # parse raw binary
-            paren = self._getc()
-
             # grab the 'expected' size of the binary data
             size = self._get_until(b')')
             if size == None:
@@ -174,7 +169,7 @@ class LLSDNotationParser(LLSDBaseParser):
 
         else:
             # get the encoding base
-            base = self._getc(2)
+            base = cc + self._getc()
             try:
                 decoder = {
                     b'16': base64.b16decode,
@@ -201,7 +196,7 @@ class LLSDNotationParser(LLSDBaseParser):
                 # convert exception class so it's more catchable
                 self._error("Bad binary data: " + str(exc))
 
-    def _parse_map(self):
+    def _parse_map(self, cc):
         """
         parse a single map
 
@@ -210,97 +205,89 @@ class LLSDNotationParser(LLSDBaseParser):
         rv = {}
         key = b''
         found_key = False
-        self._getc()   # eat the beginning '{'
-        cc = self._peek()
+        # skip the beginning '{'
+        cc = self._getc()
         while (cc != b'}'):
             if cc is None:
                 self._error("Unclosed map")
             if not found_key:
                 if cc in (b"'", b'"', b's'):
-                    key = self._parse_string()
+                    key = self._parse_string(cc)
                     found_key = True
                 elif cc.isspace() or cc == b',':
-                    self._getc()    # eat the character
+                    # ignore space or comma
                     pass
                 else:
                     self._error("Invalid map key")
             elif cc.isspace():
-                self._getc()    # eat the space
+                # ignore space
                 pass
             elif cc == b':':
-                self._getc()    # eat the ':'
-                value = self._parse()
+                # skip the ':'
+                value = self._parse(self._getc())
                 rv[key] = value
                 found_key = False
             else:
                 self._error("missing separator")
-            cc = self._peek()
-
-        if self._getc() != b'}':
-            self._error("Invalid map close token")
+            cc = self._getc()
 
         return rv
 
-    def _parse_array(self):
+    def _parse_array(self, cc):
         """
         parse a single array.
 
         array: [ object, object, object ]
         """
         rv = []
-        self._getc()    # eat the beginning '['
-        cc = self._peek()
+        # skip the beginning '['
+        cc = self._getc()
         while (cc != b']'):
             if cc is None:
                 self._error('Unclosed array')
             if cc.isspace() or cc == b',':
-                self._getc()
-                cc = self._peek()
+                cc = self._getc()
                 continue
-            rv.append(self._parse())
-            cc = self._peek()
+            rv.append(self._parse(cc))
+            cc = self._getc()
 
-        if self._getc() != b']':
-            self._error("Invalid array close token")
         return rv
 
-    def _parse_uuid(self):
+    def _parse_uuid(self, cc):
         "Parse a uuid."
-        self._getc()    # eat the beginning 'u'
+        # ignore the beginning 'u'
         # see comment on LLSDNotationFormatter.UUID() re use of latin-1
         return uuid.UUID(hex=self._getc(36).decode('latin-1'))
 
-    def _parse_uri(self):
+    def _parse_uri(self, cc):
         "Parse a URI."
-        self._getc()    # eat the beginning 'l'
-        return uri(self._parse_string())
+        # skip the beginning 'l'
+        return uri(self._parse_string(self._getc()))
 
-    def _parse_date(self):
+    def _parse_date(self, cc):
         "Parse a date."
-        self._getc()    # eat the beginning 'd'
-        datestr = self._parse_string()
+        # skip the beginning 'd'
+        datestr = self._parse_string(self._getc())
         return _parse_datestr(datestr)
 
-    def _parse_real(self):
+    def _parse_real(self, cc):
         "Parse a floating point number."
-        self._getc()    # eat the beginning 'r'
-        return float(self._get_re("real", _real_regex))
+        # ignore the beginning 'r'
+        return float(self._get_re(b'', "real", _real_regex))
 
-    def _parse_integer(self):
+    def _parse_integer(self, cc):
         "Parse an integer."
-        self._getc()    # eat the beginning 'i'
-        return int(self._get_re("integer", _int_regex))
+        # ignore the beginning 'i'
+        return int(self._get_re(b'', "integer", _int_regex))
 
-    def _parse_string(self):
+    def _parse_string(self, delim):
         """
         Parse a string
 
         string: "g\'day" | 'have a "nice" day' | s(size)"raw data"
         """
         rv = ""
-        delim = self._peek()
         if delim in (b"'", b'"'):
-            delim = self._getc()        # eat the beginning delim
             rv = self._parse_string_delim(delim)
         elif delim == b's':
             rv = self._parse_string_raw()
@@ -315,7 +302,6 @@ class LLSDNotationParser(LLSDBaseParser):
 
         string: s(size)"raw data"
         """
-        self._getc()    # eat the beginning 's'
         # Read the (size) portion.
         cc = self._getc()
         if cc != b'(':
@@ -338,6 +324,12 @@ class LLSDNotationParser(LLSDBaseParser):
             return rv.decode('utf-8')
         except UnicodeDecodeError as exc:
             raise LLSDParseError(exc)
+
+    def _parse_true(self, cc):
+        return self._get_re(cc, "'true'", _true_regex, True)
+
+    def _parse_false(self, cc):
+        return self._get_re(cc, "'false'", _false_regex, False)
 
 
 class LLSDNotationFormatter(LLSDBaseFormatter):
