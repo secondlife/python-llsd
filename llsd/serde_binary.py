@@ -165,12 +165,6 @@ def write_binary(stream, something):
 
 def _write_binary_recurse(stream, something):
     "Binary formatter workhorse."
-    def _format_list(something):
-        stream.writelines([b'[', struct.pack('!i', len(something))])
-        for item in something:
-            _write_binary_recurse(stream, item)
-        stream.write(b']')
-
     if something is None:
         stream.write(b'!')
     elif isinstance(something, _LLSD):
@@ -204,7 +198,7 @@ def _write_binary_recurse(stream, something):
         seconds_since_epoch = calendar.timegm(something.timetuple())
         stream.writelines([b'd', struct.pack('<d', seconds_since_epoch)])
     elif isinstance(something, (list, tuple)):
-        _format_list(something)
+        _write_list(stream, something)
     elif isinstance(something, dict):
         stream.writelines([b'{', struct.pack('!i', len(something))])
         for key, value in something.items():
@@ -214,11 +208,18 @@ def _write_binary_recurse(stream, something):
         stream.write(b'}')
     else:
         try:
-            return _format_list(list(something))
+            return _write_list(stream, list(something))
         except TypeError:
             raise LLSDSerializationError(
                 "Cannot serialize unknown type: %s (%s)" %
                 (type(something), something))
+
+
+def _write_list(stream, something):
+    stream.writelines([b'[', struct.pack('!i', len(something))])
+    for item in something:
+        _write_binary_recurse(stream, item)
+    stream.write(b']')
 
 
 def parse_binary(something):

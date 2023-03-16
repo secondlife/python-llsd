@@ -72,37 +72,37 @@ class LLSDXMLFormatter(LLSDBaseFormatter):
         v = remove_invalid_xml_bytes(v)
         return v.replace(b'&',b'&amp;').replace(b'<',b'&lt;').replace(b'>',b'&gt;')
 
-    def LLSD(self, v):
+    def _LLSD(self, v):
         return self._generate(v.thing)
-    def UNDEF(self, _v):
+    def _UNDEF(self, _v):
         return self._elt(b'undef')
-    def BOOLEAN(self, v):
+    def _BOOLEAN(self, v):
         if v:
             return self._elt(b'boolean', b'true')
         else:
             return self._elt(b'boolean', b'false')
-    def INTEGER(self, v):
+    def _INTEGER(self, v):
         return self._elt(b'integer', str(v))
-    def REAL(self, v):
+    def _REAL(self, v):
         return self._elt(b'real', repr(v))
-    def UUID(self, v):
+    def _UUID(self, v):
         if v.int == 0:
             return self._elt(b'uuid')
         else:
             return self._elt(b'uuid', str(v))
-    def BINARY(self, v):
+    def _BINARY(self, v):
         return self._elt(b'binary', base64.b64encode(v).strip())
-    def STRING(self, v):
+    def _STRING(self, v):
         return self._elt(b'string', self.xml_esc(v))
-    def URI(self, v):
+    def _URI(self, v):
         return self._elt(b'uri', self.xml_esc(str(v)))
-    def DATE(self, v):
+    def _DATE(self, v):
         return self._elt(b'date', _format_datestr(v))
-    def ARRAY(self, v):
+    def _ARRAY(self, v):
         return self._elt(
             b'array',
             lambda: [self._generate(item) for item in v])
-    def MAP(self, v):
+    def _MAP(self, v):
         return self._elt(
             b'map',
             lambda: [(self._elt(b'key', self.xml_esc(UnicodeType(key))),
@@ -159,7 +159,7 @@ class LLSDXMLPrettyFormatter(LLSDXMLFormatter):
         "Write an indentation based on the atom and indentation level."
         self.stream.writelines([self._indent_atom] * self._indent_level)
 
-    def ARRAY(self, v):
+    def _ARRAY(self, v):
         "Recursively format an array with pretty turned on."
         self.stream.write(b'<array>\n')
         self._indent_level += 1
@@ -171,7 +171,7 @@ class LLSDXMLPrettyFormatter(LLSDXMLFormatter):
         self._indent()
         self.stream.write(b'</array>')
 
-    def MAP(self, v):
+    def _MAP(self, v):
         "Recursively format a map with pretty turned on."
         self.stream.write(b'<map>\n')
         self._indent_level += 1
@@ -276,14 +276,6 @@ def parse_xml_nohdr(baseparser):
     return _to_python(element[0])
 
 
-_g_xml_formatter = None
-def _get_xml_formatter():
-    global _g_xml_formatter
-    if _g_xml_formatter is None:
-        _g_xml_formatter = LLSDXMLFormatter()
-    return _g_xml_formatter
-
-
 def format_xml(something):
     """
     Format a python object as application/llsd+xml
@@ -293,7 +285,7 @@ def format_xml(something):
 
     See http://wiki.secondlife.com/wiki/LLSD#XML_Serialization
     """
-    return _get_xml_formatter().format(something)
+    return LLSDXMLFormatter().format(something)
 
 
 def write_xml(stream, something):
@@ -306,4 +298,4 @@ def write_xml(stream, something):
 
     See http://wiki.secondlife.com/wiki/LLSD#XML_Serialization
     """
-    return _get_xml_formatter().write(stream, something)
+    return LLSDXMLFormatter().write(stream, something)

@@ -267,7 +267,7 @@ class LLSDNotationParser(LLSDBaseParser):
     def _parse_uuid(self):
         "Parse a uuid."
         self._getc()    # eat the beginning 'u'
-        # see comment on LLSDNotationFormatter.UUID() re use of latin-1
+        # see comment on LLSDNotationFormatter._UUID() re use of latin-1
         return uuid.UUID(hex=self._getc(36).decode('latin-1'))
 
     def _parse_uri(self):
@@ -346,17 +346,17 @@ class LLSDNotationFormatter(LLSDBaseFormatter):
 
     See http://wiki.secondlife.com/wiki/LLSD#Notation_Serialization
     """
-    def LLSD(self, v):
+    def _LLSD(self, v):
         return self._generate(v.thing)
-    def UNDEF(self, v):
+    def _UNDEF(self, v):
         self.stream.write(b'!')
-    def BOOLEAN(self, v):
+    def _BOOLEAN(self, v):
         self.stream.write(b'true' if v else b'false')
-    def INTEGER(self, v):
+    def _INTEGER(self, v):
         self.stream.write(B("i%d") % v)
-    def REAL(self, v):
+    def _REAL(self, v):
         self.stream.write(B("r%r") % v)
-    def UUID(self, v):
+    def _UUID(self, v):
         # latin-1 is the byte-to-byte encoding, mapping \x00-\xFF ->
         # \u0000-\u00FF. It's also the fastest encoding, I believe, from
         # https://docs.python.org/3/library/codecs.html#encodings-and-unicode
@@ -366,16 +366,16 @@ class LLSDNotationFormatter(LLSDBaseFormatter):
         # things other than 0-9a-fA-F, so that they will fail in the UUID
         # decode, rather than with a UnicodeError.
         self.stream.writelines([b"u", str(v).encode('latin-1')])
-    def BINARY(self, v):
+    def _BINARY(self, v):
         self.stream.writelines([b'b64"', base64.b64encode(v).strip(), b'"'])
 
-    def STRING(self, v):
+    def _STRING(self, v):
         self.stream.writelines([b"'", self._esc(v), b"'"])
-    def URI(self, v):
+    def _URI(self, v):
         self.stream.writelines([b'l"', self._esc(v, b'"'), b'"'])
-    def DATE(self, v):
+    def _DATE(self, v):
         self.stream.writelines([b'd"', _format_datestr(v), b'"'])
-    def ARRAY(self, v):
+    def _ARRAY(self, v):
         self.stream.write(b'[')
         delim = b''
         for item in v:
@@ -383,7 +383,7 @@ class LLSDNotationFormatter(LLSDBaseFormatter):
             self._generate(item)
             delim = b','
         self.stream.write(b']')
-    def MAP(self, v):
+    def _MAP(self, v):
         self.stream.write(b'{')
         delim = b''
         for key, value in v.items():
@@ -409,7 +409,7 @@ class LLSDNotationFormatter(LLSDBaseFormatter):
             return self.type_map[_LLSD](something)
         else:
             try:
-                return self.ARRAY(iter(something))
+                return self._ARRAY(iter(something))
             except TypeError:
                 raise LLSDSerializationError(
                     "Cannot serialize unknown type: %s (%s)" % (t, something))
@@ -428,19 +428,6 @@ def format_notation(something):
     See http://wiki.secondlife.com/wiki/LLSD#Notation_Serialization
     """
     return LLSDNotationFormatter().format(something)
-
-
-def write_notation(stream, something):
-    """
-    Serialize to passed binary 'stream' a python object 'something' as
-    application/llsd+notation.
-
-    :param stream: a binary stream open for writing.
-    :param something: a python object (typically a dict) to be serialized.
-
-    See http://wiki.secondlife.com/wiki/LLSD#Notation_Serialization
-    """
-    return LLSDNotationFormatter().write(stream, something)
 
 
 def write_notation(stream, something):
