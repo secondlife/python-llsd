@@ -8,8 +8,6 @@ from llsd.base import (_LLSD, B, LLSDBaseFormatter, LLSDBaseParser, NOTATION_HEA
                        _format_datestr, _parse_datestr, _str_to_bytes, binary, uri)
 
 _real_regex = re.compile(br"[-+]?(?:(\d+(\.\d*)?|\d*\.\d+)([eE][-+]?\d+)?)|[-+]?inf|[-+]?nan")
-_true_regex = re.compile(br"TRUE|true|\b[Tt]\b")
-_false_regex = re.compile(br"FALSE|false|\b[Ff]\b")
 
 
 class LLSDNotationParser(LLSDBaseParser):
@@ -346,10 +344,50 @@ class LLSDNotationParser(LLSDBaseParser):
             raise LLSDParseError(exc)
 
     def _parse_true(self, cc):
-        return self._get_re(cc, "'true'", _true_regex, True)
+        # match t, T, true, TRUE -- not mixed-case
+        try:
+            rest = {b't': b'rue', b'T': b'RUE'}[cc]
+        except KeyError:
+            self._error("Invalid 'true' token")
+
+        cc = self._getc(full=False)
+        # beware, rest is bytes, so bytes[0] is an int!
+        if cc != rest[:1]:
+            # just 't' or 'T' is legal, put back cc and carry on
+            if cc:
+                self._putback()
+            return True
+
+        # saw 'tr' or 'TR', cc is the 'r'
+        tail = self._getc(len(rest)-1)
+        # 'tr' MUST be followed by 'ue'
+        if tail != rest[1:]:
+            self._error("Invalid 'true' token")
+        # good, it is
+        return True
 
     def _parse_false(self, cc):
-        return self._get_re(cc, "'false'", _false_regex, False)
+        # match f, F, false, FALSE -- not mixed-case
+        try:
+            rest = {b'f': b'alse', b'F': b'ALSE'}[cc]
+        except KeyError:
+            self._error("Invalid 'false' token")
+
+        cc = self._getc(full=False)
+        # beware, rest is bytes, so bytes[0] is an int!
+        if cc != rest[:1]:
+            # just 'f' or 'F' is legal, put back cc and carry on
+            if cc:
+                self._putback()
+            return False
+
+        # saw 'fa' or 'FA', cc is the 'a'
+        tail = self._getc(len(rest)-1)
+        # 'fa' MUST be followed by 'lse'
+        if tail != rest[1:]:
+            self._error("Invalid 'false' token")
+        # good, it is
+        return False
 
 
 class LLSDNotationFormatter(LLSDBaseFormatter):
