@@ -497,20 +497,27 @@ class LLSDBaseParser(object):
             # off by 4 bytes to try to point the user at the right spot.
             self._error("Invalid length field %d" % num, -4)
 
-        got = self._stream.peek(num)
-        if full and len(got) < num:
-            # Going right to this error is a little iffy:
-            # BufferedReader.peek() does not promise to return the requested
-            # length, but does not clarify the conditions under which it
-            # returns fewer bytes. If this is an actual problem, we could loop
-            # until we have the requested length or EOF -- but the loop must
-            # explicitly seek() past already-peeked data, then reset after.
-            # https://docs.python.org/3/library/io.html#io.BufferedReader.peek
-            self._error("Trying to peek past end of stream")
+        # Instead of using self._stream.peek() at all, use read(num) and reset
+        # the read pointer. BufferedReader.peek() does not promise to return
+        # the requested length, but does not clarify the conditions under
+        # which it returns fewer bytes.
+        # https://docs.python.org/3/library/io.html#io.BufferedReader.peek
+        # In practice, we've seen it fail with an input file up over 100Kb:
+        # peek() returns only part of what we requested, but because we also
+        # passed full=False (see LLSDNotationParser._get_re()), we didn't
+        # notice and the parse failed looking for a map delimiter halfway
+        # through a large decimal integer. read(num), on the other hand,
+        # promises to return num bytes until actual EOF.
+        oldpos = self._stream.tell()
+        try:
+            got = self._stream.read(num)
+            if full and len(got) < num:
+                self._error("Trying to peek past end of stream")
 
-        # Interestingly, peek() can also return MORE than requested -- but for
-        # our purposes (e.g. ord(peek(1))) it's important to constrain it.
-        return got[:num]
+            return got
+
+        finally:
+            self._stream.seek(oldpos)
 
     def _error(self, message, offset=0):
         oldpos = self._stream.tell()
