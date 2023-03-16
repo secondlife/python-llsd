@@ -3,14 +3,15 @@
 from __future__ import print_function
 
 import base64
+from datetime import date, datetime
+import io
+from itertools import islice
 import pprint
 import re
 import struct
 import time
 import unittest
 import uuid
-from datetime import date, datetime
-from itertools import islice
 
 import pytest
 
@@ -60,7 +61,7 @@ class LLSDNotationUnitTest(unittest.TestCase):
         :Parameters:
         - 'the_string': string to remove the whitespaces.
         """
-        return re.sub(b'\s', b'', the_string)
+        return re.sub(br'\s', b'', the_string)
 
     def assertNotationRoundtrip(self, py_in, str_in, is_alternate_notation=False):
         """
@@ -69,8 +70,12 @@ class LLSDNotationUnitTest(unittest.TestCase):
         """
         # use parse to check here
         py_out = self.llsd.parse(str_in)
+        py_out2 = self.llsd.parse(io.BytesIO(str_in))
+        self.assertEqual(py_out2, py_out)
         str_out = self.llsd.as_notation(py_in)
         py_roundtrip = self.llsd.parse(str_out)
+        py_roundtrip2 = self.llsd.parse(io.BytesIO(str_out))
+        self.assertEqual(py_roundtrip2, py_roundtrip)
         str_roundtrip = self.llsd.as_notation(py_out)
         # compare user-passed Python data with parsed user-passed string
         self.assertEqual(py_in, py_out)
@@ -325,7 +330,7 @@ class LLSDNotationUnitTest(unittest.TestCase):
         notation3 = b'b16' + b'"' + base64.b16encode(string_data1).strip() + b'"'
         notation4 = b'b16' + b'"' + base64.b16encode(string_data2).strip() + b'"'
         notation5 = b'b85' + b'"<~EHPu*CER),Dg-(AAoDo;+T~>"'
-        notation6 = b'b85' + b'"<~4E*J.<+0QR+EMI<AKYi.Eb-@U@3B6(AS+(L06_,GBeNFs@3Qh9Bln0&4X*j:@3RmWARR\S@6Peb+s:u@AKX]UEarc*87?OM+ELt*A0>u4+@0gX@q@26G%G]>+D"u%DImm2Cj@Wq05s)~>"'
+        notation6 = b'b85' +br'"<~4E*J.<+0QR+EMI<AKYi.Eb-@U@3B6(AS+(L06_,GBeNFs@3Qh9Bln0&4X*j:@3RmWARR\S@6Peb+s:u@AKX]UEarc*87?OM+ELt*A0>u4+@0gX@q@26G%G]>+D"u%DImm2Cj@Wq05s)~>"'
 
         self.assertNotationRoundtrip(python_binary1, notation1, True)
         self.assertNotationRoundtrip(python_binary2, notation2, True)
@@ -546,7 +551,10 @@ class LLSDBinaryUnitTest(unittest.TestCase):
         return the object.
         """
         binary = self.llsd.as_binary(something)
-        return self.llsd.parse(binary)
+        frombytes = self.llsd.parse(binary)
+        fromstream = self.llsd.parse(io.BytesIO(binary))
+        self.assertEqual(fromstream, frombytes)
+        return frombytes
 
     def testMap(self):
         """
@@ -981,6 +989,8 @@ class LLSDPythonXMLUnitTest(unittest.TestCase):
 
         # use parse to check
         parsed_py = self.llsd.parse(xml)
+        parsed_stream = self.llsd.parse(io.BytesIO(xml))
+        self.assertEqual(parsed_stream, parsed_py)
         formatted_xml = self.llsd.as_xml(py)
         self.assertEqual(parsed_py, py)
         self.assertEqual(py, self.llsd.parse(formatted_xml))
@@ -1557,7 +1567,7 @@ class LLSDPythonXMLUnitTest(unittest.TestCase):
         Utility method to remove all the whitespace characters from
         the given string.
         """
-        return re.sub(b'\s', b'', the_string)
+        return re.sub(br'\s', b'', the_string)
 
     def test_segfault(self):
         for i, badstring in enumerate([
