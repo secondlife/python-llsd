@@ -1,0 +1,35 @@
+name: Benchmark 
+
+on:
+  pull_request:
+
+permissions:
+  contents: write
+  deployments: write
+
+jobs:
+  benchmark:
+    name: Run benchmarks 
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+
+      - uses: actions/setup-python@v4
+        with:
+          python-version: "3.10"
+
+      - name: Run benchmarks
+        run: |
+          pip install .[dev] 
+          pytest tests/bench.py --benchmark-json benchmark.json
+
+      - name: Store results
+        uses: benchmark-action/github-action-benchmark@v1
+        with:
+          name: Python Benchmarks
+          tool: pytest
+          output-file-path: benchmark.json
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          auto-push: true
+          alert-threshold: "110%"
+          comment-on-alert: true
