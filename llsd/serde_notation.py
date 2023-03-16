@@ -7,7 +7,6 @@ from llsd.base import (_LLSD, B, LLSDBaseFormatter, LLSDBaseParser, NOTATION_HEA
                        LLSDParseError, LLSDSerializationError, UnicodeType,
                        _format_datestr, _parse_datestr, _str_to_bytes, binary, uri)
 
-_int_regex = re.compile(br"[-+]?\d+")
 _real_regex = re.compile(br"[-+]?(?:(\d+(\.\d*)?|\d*\.\d+)([eE][-+]?\d+)?)|[-+]?inf|[-+]?nan")
 _true_regex = re.compile(br"TRUE|true|\b[Tt]\b")
 _false_regex = re.compile(br"FALSE|false|\b[Ff]\b")
@@ -71,7 +70,7 @@ class LLSDNotationParser(LLSDBaseParser):
             }
         # Like LLSDBinaryParser, construct a lookup list from this dict. Start
         # by filling with the 'else' case.
-        self._dispatch = 256*[lambda: self._error("Invalid notation token")]
+        self._dispatch = 256*[lambda cc: self._error("Invalid notation token")]
         # Then fill in specific entries based on the dict above.
         for c, func in _dispatch_dict.items():
             self._dispatch[ord(c)] = func
@@ -86,8 +85,8 @@ class LLSDNotationParser(LLSDBaseParser):
         """
         self._reset(baseparser)
 
-        # avoid self._getc() here because EOF is an acceptable result
-        cc = self._stream.read(1)
+        # EOF is an acceptable result
+        cc = self._getc(full=False)
         # special case for notation: empty input means False
         if not cc:
             return False
@@ -116,10 +115,10 @@ class LLSDNotationParser(LLSDBaseParser):
         # reasonable amount and directly use re. full=False means we're
         # willing to accept a result buffer shorter than our lookahead.
         # Don't forget to prepend our lookahead character.
-        # You would think we could parse int, real, True or False with fewer
-        # bytes than this, but fuzz testing produces some real humdinger int
+        # You would think we could parse real, True or False with fewer bytes
+        # than this, but fuzz testing produces some real humdinger float
         # values.
-        peek = cc + self._peek(80, full=False)
+        peek = cc + self._peek(30, full=False)
         match = regex.match(peek)
         if not match:
             self._error("Invalid %s token" % desc)
@@ -278,7 +277,28 @@ class LLSDNotationParser(LLSDBaseParser):
     def _parse_integer(self, cc):
         "Parse an integer."
         # ignore the beginning 'i'
-        return int(self._get_re(b'', "integer", _int_regex))
+        cc = self._getc()
+        sign = 1
+        if cc == b'+':
+            cc = self._getc()
+        elif cc == b'-':
+            sign = -1
+            cc = self._getc()
+
+        digits = []
+        while cc.isdigit():
+            digits.append(cc)
+            # we can accept EOF happening here
+            cc = self._getc(full=False)
+
+        # cc is now the next _getc() after the last digit -- back up
+        if cc:
+            self._putback()
+
+        if not digits:
+            self._error('Invalid integer token')
+
+        return sign * int(b''.join(digits))
 
     def _parse_string(self, delim):
         """

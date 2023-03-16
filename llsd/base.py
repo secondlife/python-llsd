@@ -450,11 +450,17 @@ class LLSDBaseParser(object):
             c = self._stream.read(1)
         return c
 
-    def _getc(self, num=1):
+    def _getc(self, num=1, full=True):
         got = self._stream.read(num)
-        if len(got) < num:
+        if full and len(got) < num:
             self._error("Trying to read past end of stream")
         return got
+
+    def _putback(self, num=1):
+        # if either of these tests fail, it's not a user error, it's a coding error
+        assert num > 0
+        assert self._stream.tell() >= num
+        self._stream.seek(-num, io.SEEK_CUR)
 
     def _peek(self, num=1, full=True):
         # full=True means error if we can't peek ahead num bytes
