@@ -22,7 +22,7 @@ setup(
         'local_scheme': 'no-local-version', # disable local-version to allow uploads to test.pypi.org
     },
     extras_require={
-        "dev": ["pytest", "pytest-cov<3"],
+        "dev": ["pytest", "pytest-benchmark", "pytest-cov<3"],
     },
     classifiers=[
         "Intended Audience :: Developers",
