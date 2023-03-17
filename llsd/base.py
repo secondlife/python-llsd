@@ -372,13 +372,12 @@ class LLSDBaseParser(object):
             # Wrap an incoming bytes string into a stream. If the passed bytes
             # string is so large that the overhead of copying it into a
             # BytesIO is significant, advise caller to pass a stream instead.
-            # BytesIO has no peek() method, so wrap it in BufferedReader.
-            self._stream = io.BufferedReader(io.BytesIO(something))
-        elif hasattr(something, 'peek'):
-            # 'something' is already a buffered stream, use directly
+            self._stream = io.BytesIO(something)
+        elif something.seekable():
+            # 'something' is already a seekable stream, use directly
             self._stream = something
         else:
-            # 'something' isn't buffered, wrap in BufferedReader
+            # 'something' isn't seekable, wrap in BufferedReader
             # (let BufferedReader handle the problem of passing an
             # inappropriate object)
             self._stream = io.BufferedReader(something)
@@ -456,42 +455,10 @@ class LLSDBaseParser(object):
             self._error("Trying to read past end of stream")
         return got
 
-    def _putback(self, num=1):
-        # if either of these tests fail, it's not a user error, it's a coding error
-        assert num > 0
-        assert self._stream.tell() >= num
-        self._stream.seek(-num, io.SEEK_CUR)
-
-    def _peek(self, num=1, full=True):
-        # full=True means error if we can't peek ahead num bytes
-        if num < 0:
-            # There aren't many ways this can happen. The likeliest is that
-            # we've just read garbage length bytes from a binary input string.
-            # We happen to know that lengths are encoded as 4 bytes, so back
-            # off by 4 bytes to try to point the user at the right spot.
-            self._error("Invalid length field %d" % num, -4)
-
-        # Instead of using self._stream.peek() at all, use read(num) and reset
-        # the read pointer. BufferedReader.peek() does not promise to return
-        # the requested length, but does not clarify the conditions under
-        # which it returns fewer bytes.
-        # https://docs.python.org/3/library/io.html#io.BufferedReader.peek
-        # In practice, we've seen it fail with an input file up over 100Kb:
-        # peek() returns only part of what we requested, but because we also
-        # passed full=False (see LLSDNotationParser._get_re()), we didn't
-        # notice and the parse failed looking for a map delimiter halfway
-        # through a large decimal integer. read(num), on the other hand,
-        # promises to return num bytes until actual EOF.
-        oldpos = self._stream.tell()
-        try:
-            got = self._stream.read(num)
-            if full and len(got) < num:
-                self._error("Trying to peek past end of stream")
-
-            return got
-
-        finally:
-            self._stream.seek(oldpos)
+    def _putback(self, cc):
+        # if this test fails, it's not a user error, it's a coding error
+        assert self._stream.tell() >= len(cc)
+        self._stream.seek(-len(cc), io.SEEK_CUR)
 
     def _error(self, message, offset=0):
         oldpos = self._stream.tell()

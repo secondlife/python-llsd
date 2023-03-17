@@ -7,8 +7,6 @@ from llsd.base import (_LLSD, B, LLSDBaseFormatter, LLSDBaseParser, NOTATION_HEA
                        LLSDParseError, LLSDSerializationError, UnicodeType,
                        _format_datestr, _parse_datestr, _str_to_bytes, binary, uri)
 
-_real_regex = re.compile(br"[-+]?(?:(\d+(\.\d*)?|\d*\.\d+)([eE][-+]?\d+)?)|[-+]?inf|[-+]?nan")
-
 
 class LLSDNotationParser(LLSDBaseParser):
     """
@@ -105,25 +103,6 @@ class LLSDNotationParser(LLSDBaseParser):
         else:
             # we've already consumed the close delim
             return b''.join(content)
-
-    def _get_re(self, cc, desc, regex, override=None):
-        # This is the case for which we introduced _peek(full=False).
-        # Instead of trying to reimplement each of the re patterns passed to
-        # this method as individual operations on _stream, peek ahead by a
-        # reasonable amount and directly use re. full=False means we're
-        # willing to accept a result buffer shorter than our lookahead.
-        # Don't forget to prepend our lookahead character.
-        # You would think we could parse real, True or False with fewer bytes
-        # than this, but fuzz testing produces some real humdinger float
-        # values.
-        peek = cc + self._peek(30, full=False)
-        match = regex.match(peek)
-        if not match:
-            self._error("Invalid %s token" % desc)
-        else:
-            # skip what we matched, adjusting for the char we already read
-            self._getc(match.end() - len(cc))
-            return override if override is not None else match.group(0)
 
     def _parse(self, cc):
         "The notation parser workhorse."
@@ -269,34 +248,82 @@ class LLSDNotationParser(LLSDBaseParser):
 
     def _parse_real(self, cc):
         "Parse a floating point number."
-        # ignore the beginning 'r'
-        return float(self._get_re(b'', "real", _real_regex))
+        # recognize:
+        # [+-]?inf
+        # [+-]?nan
+        # [+-]?basepart([eE][+-]?\d+)?
+        # where basepart could be either:
+        # \d+(\.\d*)? or
+        # \d*\.\d+
+        digits = []
+        # skip the beginning 'r'
+        cc = self._collect_sign(self._getc(), digits)
+        try:
+            rest = {b'i': b'nf', b'n': b'an'}[cc]
+        except KeyError:
+            # cc is neither 'i' nor 'n', must be a digit:
+            # collect integer digits
+            idigits = []
+            fdigits = []
+            edigits = []
+            cc = self._collect_digits(cc, idigits)
+            digits.extend(idigits)
+            if cc == b'.':
+                digits.append(cc)
+                # skip decimal point and collect fractional digits
+                cc = self._collect_digits(self._getc(full=False), fdigits)
+                digits.extend(fdigits)
+            # Fun fact: (cc in b'eE') is True even when cc is b''!
+            if cc in (b'e', b'E'):
+                digits.append(cc)
+                # skip 'e' and check for exponent sign
+                cc = self._collect_sign(self._getc(), digits)
+                cc = self._collect_digits(cc, edigits)
+                digits.extend(edigits)
+                if not edigits:
+                    # if 'e' is present, there MUST be an exponent
+                    self._error('Invalid real exponent')
+            # Whether this real number ended after the integer part, after the
+            # decimal point, after the fractional part or after the exponent,
+            # cc is now one character PAST the end -- put it back.
+            self._putback(cc)
+            # The reason we collected idigits and fdigits separately is that
+            # while either may be empty, they may not BOTH be empty.
+            if not (idigits or fdigits):
+                self._error('Invalid real number')
+        else:
+            # cc is either 'i' for 'inf' or 'n' for 'nan',
+            # rest is 'nf' or 'an'
+            digits.extend([cc, self._expect(cc + rest, rest)])
+
+        return float(b''.join(digits))
 
     def _parse_integer(self, cc):
         "Parse an integer."
-        # ignore the beginning 'i'
-        cc = self._getc()
-        sign = 1
-        if cc == b'+':
-            cc = self._getc()
-        elif cc == b'-':
-            sign = -1
-            cc = self._getc()
-
         digits = []
+        # skip the beginning 'i'
+        cc = self._collect_sign(self._getc(), digits)
+        cc = self._collect_digits(cc, digits)
+        if not digits:
+            self._error('Invalid integer token')
+
+        # cc is now the next _getc() after the last digit -- back up
+        self._putback(cc)
+
+        return int(b''.join(digits))
+
+    def _collect_sign(self, cc, digits):
+        if cc in (b'+', b'-'):
+            digits.append(cc)
+            cc = self._getc()
+        return cc
+
+    def _collect_digits(self, cc, digits):
         while cc.isdigit():
             digits.append(cc)
             # we can accept EOF happening here
             cc = self._getc(full=False)
-
-        # cc is now the next _getc() after the last digit -- back up
-        if cc:
-            self._putback()
-
-        if not digits:
-            self._error('Invalid integer token')
-
-        return sign * int(b''.join(digits))
+        return cc
 
     def _parse_string(self, delim):
         """
@@ -345,49 +372,36 @@ class LLSDNotationParser(LLSDBaseParser):
 
     def _parse_true(self, cc):
         # match t, T, true, TRUE -- not mixed-case
-        try:
-            rest = {b't': b'rue', b'T': b'RUE'}[cc]
-        except KeyError:
-            self._error("Invalid 'true' token")
-
-        cc = self._getc(full=False)
-        # beware, rest is bytes, so bytes[0] is an int!
-        if cc != rest[:1]:
-            # just 't' or 'T' is legal, put back cc and carry on
-            if cc:
-                self._putback()
-            return True
-
-        # saw 'tr' or 'TR', cc is the 'r'
-        tail = self._getc(len(rest)-1)
-        # 'tr' MUST be followed by 'ue'
-        if tail != rest[1:]:
-            self._error("Invalid 'true' token")
-        # good, it is
-        return True
+        return self._parse_bool(cc, True, (b'true', b'TRUE'))
 
     def _parse_false(self, cc):
         # match f, F, false, FALSE -- not mixed-case
+        return self._parse_bool(cc, False, (b'false', b'FALSE'))
+
+    def _parse_bool(self, cc, result, tokens):
         try:
-            rest = {b'f': b'alse', b'F': b'ALSE'}[cc]
+            # Index on first character to find expected rest.
+            # Beware, token is bytes, so token[0] is an int!
+            rest = {token[:1]: token[1:] for token in tokens}[cc]
         except KeyError:
-            self._error("Invalid 'false' token")
+            self._error("Invalid '%s' token" % tokens[0])
 
         cc = self._getc(full=False)
-        # beware, rest is bytes, so bytes[0] is an int!
         if cc != rest[:1]:
-            # just 'f' or 'F' is legal, put back cc and carry on
-            if cc:
-                self._putback()
-            return False
+            # legal to have only first char, put back cc and carry on
+            self._putback(cc)
+            return result
 
-        # saw 'fa' or 'FA', cc is the 'a'
-        tail = self._getc(len(rest)-1)
-        # 'fa' MUST be followed by 'lse'
-        if tail != rest[1:]:
-            self._error("Invalid 'false' token")
-        # good, it is
-        return False
+        # saw 'tr' or 'TR' (or 'fa' or 'FA'), cc is the second char:
+        # MUST be followed by the rest of 'rest'
+        self._expect(tokens[0], rest[1:])
+        return result
+
+    def _expect(self, token, match):
+        # verify that the next several chars are exactly what we expect
+        if self._getc(len(match), full=False) != match:
+            self._error("Invalid '%s' token" % token)
+        return match
 
 
 class LLSDNotationFormatter(LLSDBaseFormatter):
