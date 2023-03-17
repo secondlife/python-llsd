@@ -498,7 +498,7 @@ class LLSDBaseParser(object):
         # 'offset' is relative to current pos
         self._stream.seek(offset, io.SEEK_CUR)
         raise LLSDParseError("%s at byte %d: %r" %
-                             (message, oldpos+offset, self._peek(1, full=False)))
+                             (message, oldpos+offset, self._getc(1, full=False)))
 
     # map char following escape char to corresponding character
     _escaped = {
