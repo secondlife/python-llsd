@@ -7,6 +7,14 @@ from llsd.base import (_LLSD, LLSDBaseParser, LLSDSerializationError, BINARY_HEA
                        _str_to_bytes, binary, is_integer, is_string, uri)
 
 
+try:
+    # Python 2
+    xrange
+except NameError:
+    # Python 3
+    xrange = range
+
+
 class LLSDBinaryParser(LLSDBaseParser):
     """
     Parse application/llsd+binary to a python object.
@@ -106,15 +114,10 @@ class LLSDBinaryParser(LLSDBaseParser):
         "Parse a single llsd array"
         rv = []
         size = struct.unpack("!i", self._getc(4))[0]
-        count = 0
-        cc = self._peek()
-        while (cc != b']') and (count < size):
+        for count in xrange(size):
             rv.append(self._parse())
-            count += 1
-            cc = self._peek()
-        if cc != b']':
+        if self._getc() != b']':
             self._error("invalid array close token")
-        self._getc()
         return rv
 
     def _parse_string(self):
