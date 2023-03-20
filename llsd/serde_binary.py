@@ -63,15 +63,16 @@ class LLSDBinaryParser(LLSDBaseParser):
         for c, func in _dispatch_dict.items():
             self._dispatch[ord(c)] = func
 
-    def parse(self, buffer, ignore_binary = False):
+    def parse(self, something, ignore_binary = False):
         """
         This is the basic public interface for parsing.
 
-        :param buffer: the binary data to parse in an indexable sequence.
+        :param something: serialized LLSD to parse: a bytes object, a binary
+                          stream or an LLSDBaseParser subclass.
         :param ignore_binary: parser throws away data in llsd binary nodes.
         :returns: returns a python object.
         """
-        self._reset(buffer)
+        self._reset(something)
         self._keep_binary = not ignore_binary
         try:
             return self._parse()
