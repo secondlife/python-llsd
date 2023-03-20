@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1679001687089,
+  "lastUpdate": 1679337703475,
   "repoUrl": "https://github.com/secondlife/python-llsd",
   "entries": {
     "Python Benchmarks": [
@@ -261,6 +261,93 @@ window.BENCHMARK_DATA = {
             "unit": "iter/sec",
             "range": "stddev: 0.00003668074092684782",
             "extra": "mean: 53.76794757309508 usec\nrounds: 9785"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "nat@lindenlab.com",
+            "name": "nat-goodspeed",
+            "username": "nat-goodspeed"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "0adae956ed43a09d71d7200b11eec525a6d7b0d6",
+          "message": "Merge pull request #5 from secondlife/sl-19314\n\nSL-19314: Recast llsd serialization to write to a stream.",
+          "timestamp": "2023-03-20T14:41:09-04:00",
+          "tree_id": "b553a8ff4e2aa4d7c664e0fd49b42f534965f057",
+          "url": "https://github.com/secondlife/python-llsd/commit/0adae956ed43a09d71d7200b11eec525a6d7b0d6"
+        },
+        "date": 1679337702394,
+        "tool": "pytest",
+        "benches": [
+          {
+            "name": "tests/bench.py::test_parse_xml_stream",
+            "value": 10141.084204071363,
+            "unit": "iter/sec",
+            "range": "stddev: 0.00006546413149893282",
+            "extra": "mean: 98.60878579417847 usec\nrounds: 3590"
+          },
+          {
+            "name": "tests/bench.py::test_parse_notation_stream",
+            "value": 2451.860006533864,
+            "unit": "iter/sec",
+            "range": "stddev: 0.0003483534560991509",
+            "extra": "mean: 407.8536284025759 usec\nrounds: 1690"
+          },
+          {
+            "name": "tests/bench.py::test_parse_binary_stream",
+            "value": 10133.009280781782,
+            "unit": "iter/sec",
+            "range": "stddev: 0.0001688658022580344",
+            "extra": "mean: 98.68736643679932 usec\nrounds: 6817"
+          },
+          {
+            "name": "tests/bench.py::test_parse_notation_bytes",
+            "value": 2854.595266990118,
+            "unit": "iter/sec",
+            "range": "stddev: 0.0002153905641903825",
+            "extra": "mean: 350.3123583100447 usec\nrounds: 2509"
+          },
+          {
+            "name": "tests/bench.py::test_parse_xml_bytes",
+            "value": 10584.71309520326,
+            "unit": "iter/sec",
+            "range": "stddev: 0.00015353939907668615",
+            "extra": "mean: 94.4758720435395 usec\nrounds: 930"
+          },
+          {
+            "name": "tests/bench.py::test_parse_binary_bytes",
+            "value": 11095.315584964033,
+            "unit": "iter/sec",
+            "range": "stddev: 0.00016813694472493784",
+            "extra": "mean: 90.12812590523909 usec\nrounds: 7593"
+          },
+          {
+            "name": "tests/bench.py::test_format_xml",
+            "value": 10565.237942231777,
+            "unit": "iter/sec",
+            "range": "stddev: 0.00008288246169716064",
+            "extra": "mean: 94.65002165287365 usec\nrounds: 1755"
+          },
+          {
+            "name": "tests/bench.py::test_format_notation",
+            "value": 20531.269478147016,
+            "unit": "iter/sec",
+            "range": "stddev: 0.00004856970267587009",
+            "extra": "mean: 48.706194279139716 usec\nrounds: 10593"
+          },
+          {
+            "name": "tests/bench.py::test_format_binary",
+            "value": 19827.7841545781,
+            "unit": "iter/sec",
+            "range": "stddev: 0.00007648882122992257",
+            "extra": "mean: 50.43427910067837 usec\nrounds: 9785"
           }
         ]
       }
