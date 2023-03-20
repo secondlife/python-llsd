@@ -42,6 +42,8 @@ class _LLSD:
 undef = _LLSD(None)
 
 
+# 'binary' only exists so that a Python 2 caller can distinguish binary data
+# from str data - since in Python 2, (bytes is str).
 if PY2:
     class binary(str):
         "Simple wrapper for llsd.binary data."
@@ -174,7 +176,7 @@ def _format_datestr(v):
     xml and notation serializations.
     """
     if not isinstance(v, datetime.date) and not isinstance(v, datetime.datetime):
-        raise LLSDParseError("invalid date string %s passed to date formatter" % v)
+        raise LLSDSerializationError("invalid date string %s passed to date formatter" % v)
 
     if not isinstance(v, datetime.datetime):
         v = datetime.datetime.combine(v, datetime.time(0))
@@ -322,29 +324,59 @@ class LLSDBaseFormatter(object):
     role of this base class is to provide self.type_map based on the methods
     defined in its subclass.
     """
+    __slots__ = ['stream', 'type_map']
+
     def __init__(self):
         "Construct a new formatter dispatch table."
+        self.stream = None
         self.type_map = {
-            type(None):          self.UNDEF,
-            undef:               self.UNDEF,
-            bool:                self.BOOLEAN,
-            int:                 self.INTEGER,
-            LongType:            self.INTEGER,
-            float:               self.REAL,
-            uuid.UUID:           self.UUID,
-            binary:              self.BINARY,
-            str:                 self.STRING,
-            UnicodeType:         self.STRING,
-            newstr:              self.STRING,
-            uri:                 self.URI,
-            datetime.datetime:   self.DATE,
-            datetime.date:       self.DATE,
-            list:                self.ARRAY,
-            tuple:               self.ARRAY,
-            types.GeneratorType: self.ARRAY,
-            dict:                self.MAP,
-            _LLSD:               self.LLSD,
+            type(None):          self._UNDEF,
+            undef:               self._UNDEF,
+            bool:                self._BOOLEAN,
+            int:                 self._INTEGER,
+            LongType:            self._INTEGER,
+            float:               self._REAL,
+            uuid.UUID:           self._UUID,
+            binary:              self._BINARY,
+            str:                 self._STRING,
+            UnicodeType:         self._STRING,
+            newstr:              self._STRING,
+            uri:                 self._URI,
+            datetime.datetime:   self._DATE,
+            datetime.date:       self._DATE,
+            list:                self._ARRAY,
+            tuple:               self._ARRAY,
+            types.GeneratorType: self._ARRAY,
+            dict:                self._MAP,
+            _LLSD:               self._LLSD,
         }
+
+
+    def format(self, something):
+        """
+        Pure Python implementation of the formatter.
+        Format a python object according to subclass formatting.
+
+        :param something: A python object (typically a dict) to be serialized.
+        :returns: A serialized bytes object.
+        """
+        stream = io.BytesIO()
+        self.write(stream, something)
+        return stream.getvalue()
+
+    def write(self, stream, something):
+        """
+        Serialize a python object to the passed binary 'stream' according to
+        subclass formatting.
+
+        :param stream: A binary file-like object to which to serialize 'something'.
+        :param something: A python object (typically a dict) to be serialized.
+        """
+        self.stream = stream
+        try:
+            return self._write(something)
+        finally:
+            self.stream = None
 
 
 _X_ORD = ord(b'x')
