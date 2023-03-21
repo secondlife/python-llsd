@@ -9,11 +9,11 @@ from llsd.base import (_LLSD, LLSDBaseParser, LLSDSerializationError, BINARY_HEA
 
 
 try:
-    # Python 2
-    xrange
+    # Python 2: make 'range()' lazy like Python 3
+    range = xrange
 except NameError:
-    # Python 3
-    xrange = range
+    # Python 3: 'range()' is already lazy
+    pass
 
 
 class LLSDBinaryParser(LLSDBaseParser):
@@ -116,7 +116,7 @@ class LLSDBinaryParser(LLSDBaseParser):
         "Parse a single llsd array"
         rv = []
         size = struct.unpack("!i", self._getc(4))[0]
-        for count in xrange(size):
+        for count in range(size):
             rv.append(self._parse())
         if self._getc() != b']':
             self._error("invalid array close token")
