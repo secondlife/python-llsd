@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1679337703475,
+  "lastUpdate": 1679517446697,
   "repoUrl": "https://github.com/secondlife/python-llsd",
   "entries": {
     "Python Benchmarks": [
@@ -348,6 +348,93 @@ window.BENCHMARK_DATA = {
             "unit": "iter/sec",
             "range": "stddev: 0.00007648882122992257",
             "extra": "mean: 50.43427910067837 usec\nrounds: 9785"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "nat@lindenlab.com",
+            "name": "nat-goodspeed",
+            "username": "nat-goodspeed"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "09310464c7c5ec5df260a151ed191d2a72898d9c",
+          "message": "Merge pull request #6 from secondlife/sl-18330-perf\n\nSL-18330: Refactor notation parsing to manage a lookahead char.",
+          "timestamp": "2023-03-22T16:36:50-04:00",
+          "tree_id": "48e9a5ffd5491d9afb542d5dcc3b3b6daa3e7638",
+          "url": "https://github.com/secondlife/python-llsd/commit/09310464c7c5ec5df260a151ed191d2a72898d9c"
+        },
+        "date": 1679517446149,
+        "tool": "pytest",
+        "benches": [
+          {
+            "name": "tests/bench.py::test_parse_xml_stream",
+            "value": 12909.923296042954,
+            "unit": "iter/sec",
+            "range": "stddev: 0.0000015962367173426108",
+            "extra": "mean: 77.45979407224766 usec\nrounds: 4521"
+          },
+          {
+            "name": "tests/bench.py::test_parse_notation_stream",
+            "value": 4227.471582622453,
+            "unit": "iter/sec",
+            "range": "stddev: 0.00017779182856725737",
+            "extra": "mean: 236.54801231795955 usec\nrounds: 2192"
+          },
+          {
+            "name": "tests/bench.py::test_parse_binary_stream",
+            "value": 15563.761914953298,
+            "unit": "iter/sec",
+            "range": "stddev: 0.000042570073606750205",
+            "extra": "mean: 64.2518181314007 usec\nrounds: 9001"
+          },
+          {
+            "name": "tests/bench.py::test_parse_notation_bytes",
+            "value": 4641.493022455551,
+            "unit": "iter/sec",
+            "range": "stddev: 0.000029440320878755105",
+            "extra": "mean: 215.44791625496327 usec\nrounds: 3642"
+          },
+          {
+            "name": "tests/bench.py::test_parse_xml_bytes",
+            "value": 15632.688204563447,
+            "unit": "iter/sec",
+            "range": "stddev: 0.0000013954437107169295",
+            "extra": "mean: 63.96852460142351 usec\nrounds: 7337"
+          },
+          {
+            "name": "tests/bench.py::test_parse_binary_bytes",
+            "value": 17080.303553675392,
+            "unit": "iter/sec",
+            "range": "stddev: 0.00003450061722708274",
+            "extra": "mean: 58.54696884381875 usec\nrounds: 10977"
+          },
+          {
+            "name": "tests/bench.py::test_format_xml",
+            "value": 13383.90740274769,
+            "unit": "iter/sec",
+            "range": "stddev: 0.000013177191563706168",
+            "extra": "mean: 74.71659582721723 usec\nrounds: 6950"
+          },
+          {
+            "name": "tests/bench.py::test_format_notation",
+            "value": 25066.830254749835,
+            "unit": "iter/sec",
+            "range": "stddev: 0.000013077455730759876",
+            "extra": "mean: 39.893356672430215 usec\nrounds: 13211"
+          },
+          {
+            "name": "tests/bench.py::test_format_binary",
+            "value": 26214.91177645831,
+            "unit": "iter/sec",
+            "range": "stddev: 8.712771456782391e-7",
+            "extra": "mean: 38.146227938025206 usec\nrounds: 11683"
           }
         ]
       }
