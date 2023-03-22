@@ -1,4 +1,5 @@
 import base64
+import io
 import re
 import types
 
@@ -264,8 +265,15 @@ def parse_xml_nohdr(baseparser):
     # before XML declaration. Since we explicitly test support for that case,
     # skip initial whitespace.
     baseparser.matchseq(b'')
+    stream = baseparser.remainder()
     try:
-        element = _parse(baseparser.remainder()).getroot()
+        if isinstance(stream, io.BytesIO):
+            # Empirically, fromstring() seems faster than _parse(). If passed
+            # a BytesIO, extract its contents and skip to BytesIO read pos.
+            element = fromstring(stream.getvalue()[stream.tell():])
+        else:
+            # Not a BytesIO, parse the stream
+            element = _parse(stream).getroot()
     except ElementTreeError as err:
         raise LLSDParseError(*err.args)
 

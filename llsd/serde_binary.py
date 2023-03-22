@@ -8,6 +8,14 @@ from llsd.base import (_LLSD, LLSDBaseParser, LLSDSerializationError, BINARY_HEA
                        _str_to_bytes, binary, is_integer, is_string, uri)
 
 
+try:
+    # Python 2: make 'range()' lazy like Python 3
+    range = xrange
+except NameError:
+    # Python 3: 'range()' is already lazy
+    pass
+
+
 class LLSDBinaryParser(LLSDBaseParser):
     """
     Parse application/llsd+binary to a python object.
@@ -56,15 +64,16 @@ class LLSDBinaryParser(LLSDBaseParser):
         for c, func in _dispatch_dict.items():
             self._dispatch[ord(c)] = func
 
-    def parse(self, buffer, ignore_binary = False):
+    def parse(self, something, ignore_binary = False):
         """
         This is the basic public interface for parsing.
 
-        :param buffer: the binary data to parse in an indexable sequence.
+        :param something: serialized LLSD to parse: a bytes object, a binary
+                          stream or an LLSDBaseParser subclass.
         :param ignore_binary: parser throws away data in llsd binary nodes.
         :returns: returns a python object.
         """
-        self._reset(buffer)
+        self._reset(something)
         self._keep_binary = not ignore_binary
         try:
             return self._parse()
@@ -107,15 +116,10 @@ class LLSDBinaryParser(LLSDBaseParser):
         "Parse a single llsd array"
         rv = []
         size = struct.unpack("!i", self._getc(4))[0]
-        count = 0
-        cc = self._peek()
-        while (cc != b']') and (count < size):
+        for count in range(size):
             rv.append(self._parse())
-            count += 1
-            cc = self._peek()
-        if cc != b']':
+        if self._getc() != b']':
             self._error("invalid array close token")
-        self._getc()
         return rv
 
     def _parse_string(self):
