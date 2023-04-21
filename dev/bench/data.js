@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1679517446697,
+  "lastUpdate": 1682098797163,
   "repoUrl": "https://github.com/secondlife/python-llsd",
   "entries": {
     "Python Benchmarks": [
@@ -435,6 +435,93 @@ window.BENCHMARK_DATA = {
             "unit": "iter/sec",
             "range": "stddev: 8.712771456782391e-7",
             "extra": "mean: 38.146227938025206 usec\nrounds: 11683"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "signal@lindenlab.com",
+            "name": "Signal Linden",
+            "username": "bennettgoble"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "ed393fde08e3669bbc9d2d9214aa10e1022b2563",
+          "message": "Add PyPI trusted publication (#12)\n\nAdd PyPI trusted publication\r\n\r\nPublish llsd with PyPI's new [trusted publisher](https://blog.pypi.org/posts/2023-04-20-introducing-trusted-publishers/) functionality rather than an access token.",
+          "timestamp": "2023-04-21T10:39:22-07:00",
+          "tree_id": "b9dc9d85eba28f2b9b1ed09b6201cb3b42838560",
+          "url": "https://github.com/secondlife/python-llsd/commit/ed393fde08e3669bbc9d2d9214aa10e1022b2563"
+        },
+        "date": 1682098796079,
+        "tool": "pytest",
+        "benches": [
+          {
+            "name": "tests/bench.py::test_parse_xml_stream",
+            "value": 8401.410233480117,
+            "unit": "iter/sec",
+            "range": "stddev: 0.000028143593606264825",
+            "extra": "mean: 119.02763610029906 usec\nrounds: 3108"
+          },
+          {
+            "name": "tests/bench.py::test_parse_notation_stream",
+            "value": 3103.4882017496516,
+            "unit": "iter/sec",
+            "range": "stddev: 0.0002465618766434401",
+            "extra": "mean: 322.2180768840141 usec\nrounds: 1964"
+          },
+          {
+            "name": "tests/bench.py::test_parse_binary_stream",
+            "value": 11845.999955317911,
+            "unit": "iter/sec",
+            "range": "stddev: 0.00007200932853574851",
+            "extra": "mean: 84.41668105452588 usec\nrounds: 5653"
+          },
+          {
+            "name": "tests/bench.py::test_parse_notation_bytes",
+            "value": 3598.045609310651,
+            "unit": "iter/sec",
+            "range": "stddev: 0.00008768229864581673",
+            "extra": "mean: 277.9286614411733 usec\nrounds: 3317"
+          },
+          {
+            "name": "tests/bench.py::test_parse_xml_bytes",
+            "value": 9989.97967818425,
+            "unit": "iter/sec",
+            "range": "stddev: 0.00005278396556448257",
+            "extra": "mean: 100.10030372571859 usec\nrounds: 2657"
+          },
+          {
+            "name": "tests/bench.py::test_parse_binary_bytes",
+            "value": 14149.262982134755,
+            "unit": "iter/sec",
+            "range": "stddev: 0.000047877897681145966",
+            "extra": "mean: 70.67505927783147 usec\nrounds: 8418"
+          },
+          {
+            "name": "tests/bench.py::test_format_xml",
+            "value": 10445.428648020821,
+            "unit": "iter/sec",
+            "range": "stddev: 0.000033306463552091626",
+            "extra": "mean: 95.73565946376723 usec\nrounds: 4998"
+          },
+          {
+            "name": "tests/bench.py::test_format_notation",
+            "value": 20189.290617260536,
+            "unit": "iter/sec",
+            "range": "stddev: 0.00002340255990154317",
+            "extra": "mean: 49.53121033113787 usec\nrounds: 8905"
+          },
+          {
+            "name": "tests/bench.py::test_format_binary",
+            "value": 21068.91781205809,
+            "unit": "iter/sec",
+            "range": "stddev: 0.000019710617091594125",
+            "extra": "mean: 47.46328259098734 usec\nrounds: 10977"
           }
         ]
       }
