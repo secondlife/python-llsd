@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1682098797163,
+  "lastUpdate": 1683228997398,
   "repoUrl": "https://github.com/secondlife/python-llsd",
   "entries": {
     "Python Benchmarks": [
@@ -522,6 +522,93 @@ window.BENCHMARK_DATA = {
             "unit": "iter/sec",
             "range": "stddev: 0.000019710617091594125",
             "extra": "mean: 47.46328259098734 usec\nrounds: 10977"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "signal@lindenlab.com",
+            "name": "Signal Linden",
+            "username": "bennettgoble"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "46fdce0be06eb90cc2bf0bb4d1736cd81844b890",
+          "message": "Switch PyPI action param case to kebab\n\nFixes deprecation warning about repository_url.",
+          "timestamp": "2023-05-04T12:36:02-07:00",
+          "tree_id": "e77533ea846462ef801ec06f8ad47aa995ba4a5e",
+          "url": "https://github.com/secondlife/python-llsd/commit/46fdce0be06eb90cc2bf0bb4d1736cd81844b890"
+        },
+        "date": 1683228996474,
+        "tool": "pytest",
+        "benches": [
+          {
+            "name": "tests/bench.py::test_parse_xml_stream",
+            "value": 8596.225166748598,
+            "unit": "iter/sec",
+            "range": "stddev: 0.00005808476456724832",
+            "extra": "mean: 116.33013102869153 usec\nrounds: 3587"
+          },
+          {
+            "name": "tests/bench.py::test_parse_notation_stream",
+            "value": 3215.5453601785107,
+            "unit": "iter/sec",
+            "range": "stddev: 0.0002668789446984807",
+            "extra": "mean: 310.98923759062916 usec\nrounds: 1793"
+          },
+          {
+            "name": "tests/bench.py::test_parse_binary_stream",
+            "value": 12292.815169082878,
+            "unit": "iter/sec",
+            "range": "stddev: 0.0000753499327366744",
+            "extra": "mean: 81.34833121993539 usec\nrounds: 7886"
+          },
+          {
+            "name": "tests/bench.py::test_parse_notation_bytes",
+            "value": 3697.3929771043913,
+            "unit": "iter/sec",
+            "range": "stddev: 0.00014229848015188685",
+            "extra": "mean: 270.4608371878146 usec\nrounds: 3243"
+          },
+          {
+            "name": "tests/bench.py::test_parse_xml_bytes",
+            "value": 11152.30995060082,
+            "unit": "iter/sec",
+            "range": "stddev: 0.00007596157896915804",
+            "extra": "mean: 89.66752219311533 usec\nrounds: 6511"
+          },
+          {
+            "name": "tests/bench.py::test_parse_binary_bytes",
+            "value": 14294.424712368927,
+            "unit": "iter/sec",
+            "range": "stddev: 0.000058709002444133834",
+            "extra": "mean: 69.95734491747 usec\nrounds: 8834"
+          },
+          {
+            "name": "tests/bench.py::test_format_xml",
+            "value": 11150.297285691477,
+            "unit": "iter/sec",
+            "range": "stddev: 0.00005536912357994805",
+            "extra": "mean: 89.68370747237758 usec\nrounds: 5179"
+          },
+          {
+            "name": "tests/bench.py::test_format_notation",
+            "value": 21237.79814122248,
+            "unit": "iter/sec",
+            "range": "stddev: 0.00003803726295527947",
+            "extra": "mean: 47.085860471524306 usec\nrounds: 10858"
+          },
+          {
+            "name": "tests/bench.py::test_format_binary",
+            "value": 21154.097004896656,
+            "unit": "iter/sec",
+            "range": "stddev: 0.000040814894197669976",
+            "extra": "mean: 47.27216669983712 usec\nrounds: 10030"
           }
         ]
       }
