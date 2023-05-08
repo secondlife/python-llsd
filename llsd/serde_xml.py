@@ -44,17 +44,13 @@ class LLSDXMLFormatter(LLSDBaseFormatter):
         If 'contents' is omitted, write <name/>.
         If 'contents' is bytes, write <name>contents</name>.
         If 'contents' is str, write <name>contents.encode('utf8')</name>.
-        If 'contents' is callable, write <name>, call contents(), write </name>.
         """
         if not contents:
             self.stream.writelines([b"<", name, b" />"])
         else:
-            self.stream.writelines([b"<", name, b">"])
-            if callable(contents):
-                contents()
-            else:
-                self.stream.write(_str_to_bytes(contents))
-            self.stream.writelines([b"</", name, b">"])
+            self.stream.writelines([b"<", name, b">",
+                                    _str_to_bytes(contents),
+                                    b"</", name, b">"])
 
     def xml_esc(self, v):
         "Escape string or unicode object v for xml output"
@@ -100,15 +96,16 @@ class LLSDXMLFormatter(LLSDBaseFormatter):
     def _DATE(self, v):
         return self._elt(b'date', _format_datestr(v))
     def _ARRAY(self, v):
-        return self._elt(
-            b'array',
-            lambda: [self._generate(item) for item in v])
+        self.stream.write(b'<array>')
+        for item in v:
+            self._generate(item)
+        self.stream.write(b'</array>')
     def _MAP(self, v):
-        return self._elt(
-            b'map',
-            lambda: [(self._elt(b'key', self.xml_esc(UnicodeType(key))),
-                      self._generate(value))
-                     for key, value in v.items()])
+        self.stream.write(b'<map>')
+        for key, value in v.items():
+            self._elt(b'key', self.xml_esc(UnicodeType(key)))
+            self._generate(value)
+        self.stream.write(b'</map>')
 
     def _generate(self, something):
         "Generate xml from a single python object."
@@ -127,8 +124,10 @@ class LLSDXMLFormatter(LLSDBaseFormatter):
 
         :param something: A python object (typically a dict) to be serialized.
         """
-        self.stream.write(b'<?xml version="1.0" ?>')
-        self._elt(b"llsd", lambda: self._generate(something))
+        self.stream.write(b'<?xml version="1.0" ?>'
+                          b'<llsd>')
+        self._generate(something)
+        self.stream.write(b'</llsd>')
 
 
 class LLSDXMLPrettyFormatter(LLSDXMLFormatter):

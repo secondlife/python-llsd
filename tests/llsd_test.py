@@ -1345,6 +1345,20 @@ class LLSDPythonXMLUnitTest(unittest.TestCase):
                                   map_within_map_xml)
         self.assertXMLRoundtrip({}, blank_map_xml)
 
+    def testDeepMap(self):
+        """
+        Test that formatting a deeply nested map does not cause a RecursionError
+        """
+
+        test_map = {"foo":"bar", "depth":0, "next":None}
+        max_depth = 200
+        for depth in range(max_depth):
+            test_map = {"foo":"bar", "depth":depth, "next":test_map}
+
+        # this should not throw an exception.
+        test_xml = self.llsd.as_xml(test_map)
+
+
     def testBinary(self):
         """
         Test the parse and serialization of input type : binary.
