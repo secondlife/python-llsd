@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1683228997398,
+  "lastUpdate": 1683555268241,
   "repoUrl": "https://github.com/secondlife/python-llsd",
   "entries": {
     "Python Benchmarks": [
@@ -609,6 +609,93 @@ window.BENCHMARK_DATA = {
             "unit": "iter/sec",
             "range": "stddev: 0.000040814894197669976",
             "extra": "mean: 47.27216669983712 usec\nrounds: 10030"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "nat@lindenlab.com",
+            "name": "nat-goodspeed",
+            "username": "nat-goodspeed"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "a63abbef1ed29c4e750529854b7f2c43fbe360b8",
+          "message": "Merge pull request #13 from secondlife/log/deep_map\n\nSL-18330: In XML formatter, avoid adding call stack depth.",
+          "timestamp": "2023-05-08T10:13:57-04:00",
+          "tree_id": "c9e8fa449ffcd8dd71fb48e9d3daddac89f3c115",
+          "url": "https://github.com/secondlife/python-llsd/commit/a63abbef1ed29c4e750529854b7f2c43fbe360b8"
+        },
+        "date": 1683555267712,
+        "tool": "pytest",
+        "benches": [
+          {
+            "name": "tests/bench.py::test_parse_xml_stream",
+            "value": 12385.13965525791,
+            "unit": "iter/sec",
+            "range": "stddev: 0.000003357671187857512",
+            "extra": "mean: 80.74192361452026 usec\nrounds: 4294"
+          },
+          {
+            "name": "tests/bench.py::test_parse_notation_stream",
+            "value": 4316.033655275787,
+            "unit": "iter/sec",
+            "range": "stddev: 0.00017824729524758487",
+            "extra": "mean: 231.69420812500633 usec\nrounds: 2806"
+          },
+          {
+            "name": "tests/bench.py::test_parse_binary_stream",
+            "value": 15655.984973123714,
+            "unit": "iter/sec",
+            "range": "stddev: 0.000030265184103295064",
+            "extra": "mean: 63.87333672820191 usec\nrounds: 9524"
+          },
+          {
+            "name": "tests/bench.py::test_parse_notation_bytes",
+            "value": 4713.246069957984,
+            "unit": "iter/sec",
+            "range": "stddev: 0.00002772524407139972",
+            "extra": "mean: 212.16800166109607 usec\nrounds: 3612"
+          },
+          {
+            "name": "tests/bench.py::test_parse_xml_bytes",
+            "value": 14963.893650457858,
+            "unit": "iter/sec",
+            "range": "stddev: 0.0000016281721266114382",
+            "extra": "mean: 66.8275265354751 usec\nrounds: 3109"
+          },
+          {
+            "name": "tests/bench.py::test_parse_binary_bytes",
+            "value": 17550.267383165712,
+            "unit": "iter/sec",
+            "range": "stddev: 0.00003116645055969604",
+            "extra": "mean: 56.979188873168056 usec\nrounds: 10515"
+          },
+          {
+            "name": "tests/bench.py::test_format_xml",
+            "value": 17118.960322648418,
+            "unit": "iter/sec",
+            "range": "stddev: 0.000012240580240138473",
+            "extra": "mean: 58.41476241270318 usec\nrounds: 8439"
+          },
+          {
+            "name": "tests/bench.py::test_format_notation",
+            "value": 26326.55225540916,
+            "unit": "iter/sec",
+            "range": "stddev: 0.000011888050812629382",
+            "extra": "mean: 37.984464896824306 usec\nrounds: 9643"
+          },
+          {
+            "name": "tests/bench.py::test_format_binary",
+            "value": 25760.089405910738,
+            "unit": "iter/sec",
+            "range": "stddev: 0.000001149915234740709",
+            "extra": "mean: 38.81974104369944 usec\nrounds: 11249"
           }
         ]
       }
