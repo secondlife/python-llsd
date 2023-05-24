@@ -37,20 +37,6 @@ class LLSDXMLFormatter(LLSDBaseFormatter):
     this class since the module level format_xml() is the most convenient
     interface to this functionality.
     """
-    def _elt(self, name, contents=None):
-        """
-        Serialize a single element.
-
-        If 'contents' is omitted, write <name/>.
-        If 'contents' is bytes, write <name>contents</name>.
-        If 'contents' is str, write <name>contents.encode('utf8')</name>.
-        """
-        if not contents:
-            self.stream.writelines([b"<", name, b" />"])
-        else:
-            self.stream.writelines([b"<", name, b">",
-                                    _str_to_bytes(contents),
-                                    b"</", name, b">"])
 
     def xml_esc(self, v):
         "Escape string or unicode object v for xml output"
@@ -70,53 +56,35 @@ class LLSDXMLFormatter(LLSDBaseFormatter):
         return v.replace(b'&',b'&amp;').replace(b'<',b'&lt;').replace(b'>',b'&gt;')
 
     def _LLSD(self, v):
-        return self._generate(v.thing)
+        raise LLSDSerializationError("We should never end up here")
     def _UNDEF(self, _v):
-        return self._elt(b'undef')
+        return b'<undef/>'
     def _BOOLEAN(self, v):
         if v:
-            return self._elt(b'boolean', b'true')
+            return b'<boolean>true</boolean>'
         else:
-            return self._elt(b'boolean', b'false')
+            return b'<boolean>false</boolean>'
     def _INTEGER(self, v):
-        return self._elt(b'integer', str(v))
+        return b'<integer>' + _str_to_bytes(str(v)) + b'</integer>'
     def _REAL(self, v):
-        return self._elt(b'real', repr(v))
+        return b'<real>' + _str_to_bytes(str(v)) + b'</real>'
     def _UUID(self, v):
         if v.int == 0:
-            return self._elt(b'uuid')
+            return b'<uuid/>'
         else:
-            return self._elt(b'uuid', str(v))
+            return b'<uuid>' + _str_to_bytes(str(v)) + b'</uuid>'
     def _BINARY(self, v):
-        return self._elt(b'binary', base64.b64encode(v).strip())
+        return b'<binary>' + base64.b64encode(v).strip() + b'</binary>'
     def _STRING(self, v):
-        return self._elt(b'string', self.xml_esc(v))
+        return b'<string>' + self.xml_esc(v) + b'</string>'
     def _URI(self, v):
-        return self._elt(b'uri', self.xml_esc(str(v)))
+        return b'<uri>' + self.xml_esc(v) + b'</uri>'
     def _DATE(self, v):
-        return self._elt(b'date', _format_datestr(v))
+        return b'<date>' + _format_datestr(v) + b'</date>'
     def _ARRAY(self, v):
-        self.stream.write(b'<array>')
-        for item in v:
-            self._generate(item)
-        self.stream.write(b'</array>')
+        raise LLSDSerializationError("We should never end up here")
     def _MAP(self, v):
-        self.stream.write(b'<map>')
-        for key, value in v.items():
-            self._elt(b'key', self.xml_esc(UnicodeType(key)))
-            self._generate(value)
-        self.stream.write(b'</map>')
-
-    def _generate(self, something):
-        "Generate xml from a single python object."
-        t = type(something)
-        if t in self.type_map:
-            return self.type_map[t](something)
-        elif isinstance(something, _LLSD):
-            return self.type_map[_LLSD](something)
-        else:
-            raise LLSDSerializationError(
-                "Cannot serialize unknown type: %s (%s)" % (t, something))
+        raise LLSDSerializationError("We should never end up here")
 
     def _write(self, something):
         """
@@ -126,7 +94,36 @@ class LLSDXMLFormatter(LLSDBaseFormatter):
         """
         self.stream.write(b'<?xml version="1.0" ?>'
                           b'<llsd>')
-        self._generate(something)
+
+        iter_stack = [(iter([something]), b"")]
+        while True:
+            cur_iter, iter_type = iter_stack[-1]
+            try:
+                item = next(cur_iter)
+                if iter_type == b"map":
+                    self.stream.write(b'<key>' + _str_to_bytes(self.xml_esc(UnicodeType(item[0]))) + b'</key>')
+                    item = item[1]
+                if isinstance(item, _LLSD):
+                    item = item.thing
+                t = type(item)
+                if not t in self.type_map:
+                    raise LLSDSerializationError(
+                        "Cannot serialize unknown type: %s (%s)" % (t, item))
+                tf = self.type_map[t]
+
+                if tf == self._MAP:
+                    self.stream.write(b'<map>')
+                    iter_stack.append((iter(item.items()), b"map"))
+                elif tf == self._ARRAY:
+                    self.stream.write(b'<array>')
+                    iter_stack.append((iter(item), b"array"))
+                else:
+                    self.stream.write(tf(item))
+            except StopIteration:
+                self.stream.write(b'</' + iter_type + b'>')
+                iter_stack.pop()
+            if len(iter_stack) == 1:
+                break
         self.stream.write(b'</llsd>')
 
 
@@ -161,40 +158,64 @@ class LLSDXMLPrettyFormatter(LLSDXMLFormatter):
 
     def _ARRAY(self, v):
         "Recursively format an array with pretty turned on."
-        self.stream.write(b'<array>\n')
-        self._indent_level += 1
-        for item in v:
-            self._indent()
-            self._generate(item)
-            self.stream.write(b'\n')
-        self._indent_level -= 1
-        self._indent()
-        self.stream.write(b'</array>')
+        raise LLSDSerializationError("We should never end up here")
 
     def _MAP(self, v):
         "Recursively format a map with pretty turned on."
-        self.stream.write(b'<map>\n')
-        self._indent_level += 1
-        # sorted list of keys
-        for key in sorted(v):
-            self._indent()
-            self._elt(b'key', UnicodeType(key))
-            self.stream.write(b'\n')
-            self._indent()
-            self._generate(v[key])
-            self.stream.write(b'\n')
-        self._indent_level -= 1
-        self._indent()
-        self.stream.write(b'</map>')
+        raise LLSDSerializationError("We should never end up here")
 
     def _write(self, something):
         """
-        Serialize a python object to self.stream as 'pretty' application/llsd+xml.
+        Serialize a python object to self.stream as application/llsd+xml.
 
-        :param something: a python object (typically a dict) to be serialized.
+        :param something: A python object (typically a dict) to be serialized.
+
+        NOTE: This is nearly identical to the above _write with the exception
+        that this one includes newlines and indentation.  Doing something clever
+        for the above may decrease performance for the common case, so it's been
+        split out.  We can probably revisit this, though.
         """
-        self.stream.write(b'<?xml version="1.0" ?>\n<llsd>')
-        self._generate(something)
+        self.stream.write(b'<?xml version="1.0" ?>\n'
+                          b'<llsd>\n')
+
+        iter_stack = [(iter([something]), b"")]
+        while True:
+            cur_iter, iter_type = iter_stack[-1]
+            try:
+                item = next(cur_iter)
+                if iter_type == b"map":
+                    self._indent()
+                    self.stream.write(b'<key>' + _str_to_bytes(self.xml_esc(UnicodeType(item[0]))) + b'</key>\n')
+                    item = item[1]
+                if isinstance(item, _LLSD):
+                    item = item.thing
+                t = type(item)
+                if not t in self.type_map:
+                    raise LLSDSerializationError(
+                        "Cannot serialize unknown type: %s (%s)" % (t, item))
+                tf = self.type_map[t]
+
+                if tf == self._MAP:
+                    self._indent()
+                    self.stream.write(b'<map>\n')
+                    self._indent_level += 1
+                    iter_stack.append((iter(item.items()), b"map"))
+                elif tf == self._ARRAY:
+                    self._indent()
+                    self.stream.write(b'<array>\n')
+                    self._indent_level += 1
+                    iter_stack.append((iter(item), b"array"))
+                else:
+                    self._indent()
+                    self.stream.write(tf(item))
+                    self.stream.write(b'\n')
+            except StopIteration:
+                self._indent_level -= 1
+                self._indent()
+                self.stream.write(b'</' + iter_type + b'>\n')
+                iter_stack.pop()
+            if len(iter_stack) == 1:
+                break
         self.stream.write(b'</llsd>\n')
 
 

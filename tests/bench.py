@@ -45,6 +45,9 @@ BENCH_DATA_XML = b"""<?xml version="1.0" encoding="UTF-8"?>
 </llsd>"""
 
 _bench_data = llsd.parse_xml(BENCH_DATA_XML)
+
+    
+    
 BENCH_DATA_BINARY = llsd.format_binary(_bench_data)
 BENCH_DATA_NOTATION = llsd.format_notation(_bench_data)
 
@@ -78,6 +81,31 @@ def binary_stream():
         f.seek(0)
         yield f
 
+def build_deep_xml():
+
+    deep_data = {}
+    curr_data = deep_data
+    for i in range(250):
+        curr_data["curr_data"] = {}
+        curr_data["integer"] = 7
+        curr_data["string"] = "string"
+        curr_data = curr_data["curr_data"]
+        
+    return deep_data
+_deep_bench_data = build_deep_xml()
+
+def build_wide_xml():
+    wide_xml = b"""
+<?xml version="1.0" encoding="UTF-8"?><llsd><map><key>wide_array</key><array>"
+"""
+
+    for i in range(100000):
+        wide_xml += b"""
+    <real>5000</real>"""
+    wide_xml += b"</array></map></llsd>"
+
+    return llsd.parse_xml(wide_xml)
+_wide_bench_data = build_wide_xml()
 
 def bench_stream(parse, stream):
     ret = parse(stream)
@@ -125,3 +153,9 @@ def test_format_notation(benchmark):
 
 def test_format_binary(benchmark):
     benchmark(llsd.format_binary, _bench_data)
+
+def test_format_xml_deep(benchmark):
+    benchmark(llsd.format_xml, _deep_bench_data)
+
+def test_format_xml_wide(benchmark):
+    benchmark(llsd.format_xml, _wide_bench_data)
