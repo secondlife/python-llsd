@@ -82,7 +82,6 @@ def binary_stream():
         yield f
 
 def build_deep_xml():
-
     deep_data = {}
     curr_data = deep_data
     for i in range(250):
@@ -96,16 +95,14 @@ def build_deep_xml():
 _deep_bench_data = build_deep_xml()
 
 def build_wide_xml():
+    
     wide_xml = b"""
 <?xml version="1.0" encoding="UTF-8"?><llsd><map><key>wide_array</key><array>"
 """
-
+    wide_data = {}
     for i in range(100000):
-        wide_xml += b"""
-    <real>5000</real>"""
-    wide_xml += b"</array></map></llsd>"
-
-    return llsd.parse_xml(wide_xml)
+        wide_data["item"+str(i)] = {"item1":2.345, "item2": [1,2,3], "item3": "string", "item4":{"subitem": llsd.uri("http://foo.bar.com")}}
+    return wide_data
 _wide_bench_data = build_wide_xml()
 
 def bench_stream(parse, stream):
