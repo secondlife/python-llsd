@@ -65,14 +65,14 @@ class LLSDXMLFormatter(LLSDBaseFormatter):
         else:
             return b'<boolean>false</boolean>'
     def _INTEGER(self, v):
-        return b'<integer>' + _str_to_bytes(str(v)) + b'</integer>'
+        return b'<integer>' + str(v).encode() + b'</integer>'
     def _REAL(self, v):
-        return b'<real>' + _str_to_bytes(str(v)) + b'</real>'
+        return b'<real>' + str(v).encode() + b'</real>'
     def _UUID(self, v):
         if v.int == 0:
             return b'<uuid/>'
         else:
-            return b'<uuid>' + _str_to_bytes(str(v)) + b'</uuid>'
+            return b'<uuid>' + str(v).encode() + b'</uuid>'
     def _BINARY(self, v):
         return b'<binary>' + base64.b64encode(v).strip() + b'</binary>'
     def _STRING(self, v):
@@ -95,14 +95,14 @@ class LLSDXMLFormatter(LLSDBaseFormatter):
         self.stream.write(b'<?xml version="1.0" ?>'
                           b'<llsd>')
 
-        iter_stack = [(iter([something]), b"")]
+        iter_stack = [(iter([something]), b"", None)]
         while True:
-            cur_iter, iter_type = iter_stack[-1]
+            cur_iter, iter_type, iterable = iter_stack[-1]
             try:
                 item = next(cur_iter)
                 if iter_type == b"map":
-                    self.stream.write(b'<key>' + _str_to_bytes(self.xml_esc(UnicodeType(item[0]))) + b'</key>')
-                    item = item[1]
+                    self.stream.write(b'<key>' + self.xml_esc(UnicodeType(item)) + b'</key>')
+                    item = iterable[item]
                 if isinstance(item, _LLSD):
                     item = item.thing
                 t = type(item)
@@ -113,10 +113,10 @@ class LLSDXMLFormatter(LLSDBaseFormatter):
 
                 if tf == self._MAP:
                     self.stream.write(b'<map>')
-                    iter_stack.append((iter(item.items()), b"map"))
+                    iter_stack.append((iter(list(item)), b"map", item))
                 elif tf == self._ARRAY:
                     self.stream.write(b'<array>')
-                    iter_stack.append((iter(item), b"array"))
+                    iter_stack.append((iter(item), b"array", None))
                 else:
                     self.stream.write(tf(item))
             except StopIteration:

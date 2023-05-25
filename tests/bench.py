@@ -85,10 +85,11 @@ def build_deep_xml():
 
     deep_data = {}
     curr_data = deep_data
-    for i in range(1000):
+    for i in range(250):
         curr_data["curr_data"] = {}
         curr_data["integer"] = 7
         curr_data["string"] = "string"
+        curr_data["map"] = { "item1": 2.345, "item2": [1,2,3], "item3": {"item4": llsd.uri("http://foo.bar.com")}}
         curr_data = curr_data["curr_data"]
         
     return deep_data
