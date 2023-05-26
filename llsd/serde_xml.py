@@ -27,6 +27,9 @@ INVALID_XML_RE = re.compile(r'[\x00-\x08\x0b\x0c\x0e-\x1f]')
 
 
 def remove_invalid_xml_bytes(b):
+    """
+    Remove characters that aren't allowed in xml.
+    """
     try:
         # Dropping chars that cannot be parsed later on.  The
         # translate() function was benchmarked to be the fastest way
@@ -37,7 +40,8 @@ def remove_invalid_xml_bytes(b):
         # unit tests)
         return INVALID_XML_RE.sub('', b)
 
-def xml_esc(v):
+# only python2, which is not covered by coverage tests
+def xml_esc(v): # pragma: no cover
     "Escape string or unicode object v for xml output"
 
     # Use is_unicode() instead of is_string() because in python 2, str is
@@ -73,9 +77,9 @@ class LLSDXMLFormatter(LLSDBaseFormatter):
         # Call the super class constructor so that we have the type map
         super(LLSDXMLFormatter, self).__init__()
         self.py2 = PY2
-        
+
     def _LLSD(self, v):
-        raise LLSDSerializationError("We should never end up here")
+        raise LLSDSerializationError("We should never end up here") # pragma: no cover
     def _UNDEF(self, _v):
         return b'<undef/>'
     def _BOOLEAN(self, v):
@@ -89,26 +93,23 @@ class LLSDXMLFormatter(LLSDBaseFormatter):
     def _UUID(self, v):
         if v.int == 0:
             return b'<uuid/>'
-        else:
-            return b'<uuid>' + str(v).encode('utf-8') + b'</uuid>'
+        return b'<uuid>' + str(v).encode('utf-8') + b'</uuid>'
     def _BINARY(self, v):
         return b'<binary>' + base64.b64encode(v).strip() + b'</binary>'
     def _STRING(self, v):
-        if self.py2:
+        if self.py2:    # pragma: no cover
             return b'<string>' + _str_to_bytes(xml_esc(v)) + b'</string>'
-        else:
-            return b'<string>' + v.translate(XML_ESC_TRANS).encode('utf-8') + b'</string>'
+        return b'<string>' + v.translate(XML_ESC_TRANS).encode('utf-8') + b'</string>'
     def _URI(self, v):
-        if self.py2:
+        if self.py2:    # pragma: no cover
             return b'<uri>' + _str_to_bytes(xml_esc(v)) + b'</uri>'
-        else:
-            return b'<uri>' + UnicodeType(v).translate(XML_ESC_TRANS).encode('utf-8') + b'</uri>'
+        return b'<uri>' + UnicodeType(v).translate(XML_ESC_TRANS).encode('utf-8') + b'</uri>'
     def _DATE(self, v):
         return b'<date>' + _format_datestr(v) + b'</date>'
     def _ARRAY(self, v):
-        raise LLSDSerializationError("We should never end up here")
+        raise LLSDSerializationError("We should never end up here") # pragma: no cover
     def _MAP(self, v):
-        raise LLSDSerializationError("We should never end up here")
+        raise LLSDSerializationError("We should never end up here") # pragma: no cover
 
     def _write(self, something):
         """
@@ -126,7 +127,7 @@ class LLSDXMLFormatter(LLSDBaseFormatter):
                 item = next(cur_iter)
                 if iter_type == b"map":
 
-                    if self.py2:
+                    if self.py2: # pragma: no cover
                         self.stream.write(b'<key>' +
                                           _str_to_bytes(xml_esc(UnicodeType(item))) +
                                           b'</key>')
@@ -211,7 +212,7 @@ class LLSDXMLPrettyFormatter(LLSDXMLFormatter):
                 item = next(cur_iter)
                 if iter_type == b"map":
                     self._indent()
-                    if self.py2:
+                    if self.py2:  # pragma: no cover
                         self.stream.write(b'<key>' +
                                           _str_to_bytes(xml_esc(UnicodeType(item))) +
                                           b'</key>')
