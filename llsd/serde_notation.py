@@ -1,5 +1,6 @@
 import base64
 import binascii
+from collections import deque
 import uuid
 
 from llsd.base import (_LLSD, B, LLSDBaseFormatter, LLSDBaseParser, NOTATION_HEADER,
@@ -468,21 +469,23 @@ class LLSDNotationFormatter(LLSDBaseFormatter):
         split out.  We can probably revisit this, though.
         """
 
-        iter_stack = [[iter([something]), b"", None, b""]]
+        iter_stack = deque()
+        iter_stack.append((iter([something]), b"", None, b""))
         while True:
-            cur_iter, iter_type, iterable_obj, delim = iter_stack[-1]
+            cur_iter, iter_type, iterable_obj, delim = iter_stack.pop()
             try:
                 item = next(cur_iter)
                 self.stream.write(delim)
-                iter_stack[-1][3] = b","
+                delim = b","
+                iter_stack.append((cur_iter, iter_type, iterable_obj, delim))
                 if iter_type == b"}":
                     if self.py2:  # pragma: no cover
-                        self.stream.writelines([b"'", self._esc(UnicodeType(item)), b"':"])
+                        self.stream.writelines((b"'", self._esc(UnicodeType(item)), b"':"))
                     else:
                         # calling translate directly is a bit faster
-                        self.stream.writelines([b"'",
+                        self.stream.writelines((b"'",
                                                 UnicodeType(item).translate(STR_ESC_TRANS_SINGLE).encode('utf-8'),
-                                                b"':"])
+                                                b"':"))
                     item = iterable_obj[item] # pylint: disable=unsubscriptable-object
                 if isinstance(item, _LLSD):
                     item = item.thing
@@ -494,15 +497,14 @@ class LLSDNotationFormatter(LLSDBaseFormatter):
 
                 if tfunction == self._MAP:
                     self.stream.write(b'{')
-                    iter_stack.append([iter(list(item)), b"}", item, b""])
+                    iter_stack.append((iter(list(item)), b"}", item, b""))
                 elif tfunction == self._ARRAY:
                     self.stream.write(b'[')
-                    iter_stack.append([iter(item), b"]", None, b""])
+                    iter_stack.append((iter(item), b"]", None, b""))
                 else:
                     self.stream.write(tfunction(item))
             except StopIteration:
                 self.stream.write(iter_type)
-                iter_stack.pop()
             if len(iter_stack) == 1:
                 break
 
