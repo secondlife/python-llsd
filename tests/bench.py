@@ -157,3 +157,9 @@ def test_format_xml_deep(benchmark):
 
 def test_format_xml_wide(benchmark):
     benchmark(llsd.format_xml, _wide_bench_data)
+
+def test_format_notation_deep(benchmark):
+    benchmark(llsd.format_notation, _deep_bench_data)
+
+def test_format_notation_wide(benchmark):
+    benchmark(llsd.format_notation, _wide_bench_data)

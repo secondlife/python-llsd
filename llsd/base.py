@@ -324,11 +324,12 @@ class LLSDBaseFormatter(object):
     role of this base class is to provide self.type_map based on the methods
     defined in its subclass.
     """
-    __slots__ = ['stream', 'type_map']
+    __slots__ = ['stream', 'type_map', 'py2']
 
     def __init__(self):
         "Construct a new formatter dispatch table."
         self.stream = None
+        self.py2 = PY2
         self.type_map = {
             type(None):          self._UNDEF,
             undef:               self._UNDEF,

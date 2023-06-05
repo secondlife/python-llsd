@@ -76,7 +76,6 @@ class LLSDXMLFormatter(LLSDBaseFormatter):
         "Construct a pretty serializer."
         # Call the super class constructor so that we have the type map
         super(LLSDXMLFormatter, self).__init__()
-        self.py2 = PY2
 
     def _LLSD(self, v):
         raise LLSDSerializationError("We should never end up here") # pragma: no cover
@@ -221,7 +220,7 @@ class LLSDXMLPrettyFormatter(LLSDXMLFormatter):
                         self.stream.write(b'<key>' +
                         UnicodeType(item).translate(XML_ESC_TRANS).encode('utf-8') +
                                           b'</key>\n')
-                    item = iterable_obj[item]
+                    item = iterable_obj[item] # pylint: disable=unsubscriptable-object
                 if isinstance(item, _LLSD):
                     item = item.thing
                 item_type = type(item)

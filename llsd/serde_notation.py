@@ -1,11 +1,16 @@
 import base64
 import binascii
-import re
 import uuid
 
 from llsd.base import (_LLSD, B, LLSDBaseFormatter, LLSDBaseParser, NOTATION_HEADER,
                        LLSDParseError, LLSDSerializationError, UnicodeType,
-                       _format_datestr, _parse_datestr, _str_to_bytes, binary, uri)
+                       _format_datestr, _parse_datestr, _str_to_bytes, binary, uri, PY2)
+
+if not PY2:
+    STR_ESC_TRANS_SINGLE = str.maketrans({'\\': '\\\\',
+                                          '\'':'\\\''})
+    STR_ESC_TRANS_DOUBLE = str.maketrans({'\\': '\\\\',
+                                          '\"':'\\\"'})
 
 
 class LLSDNotationParser(LLSDBaseParser):
@@ -412,15 +417,15 @@ class LLSDNotationFormatter(LLSDBaseFormatter):
     See http://wiki.secondlife.com/wiki/LLSD#Notation_Serialization
     """
     def _LLSD(self, v):
-        return self._generate(v.thing)
+        raise LLSDSerializationError("We should never end up here") # pragma: no cover
     def _UNDEF(self, v):
-        self.stream.write(b'!')
+        return b'!'
     def _BOOLEAN(self, v):
-        self.stream.write(b'true' if v else b'false')
+        return b'true' if v else b'false'
     def _INTEGER(self, v):
-        self.stream.write(B("i%d") % v)
+        return B("i%d") % v
     def _REAL(self, v):
-        self.stream.write(B("r%r") % v)
+        return B("r%r") % v
     def _UUID(self, v):
         # latin-1 is the byte-to-byte encoding, mapping \x00-\xFF ->
         # \u0000-\u00FF. It's also the fastest encoding, I believe, from
@@ -430,57 +435,76 @@ class LLSDNotationFormatter(LLSDBaseFormatter):
         # error behavior in case someone passes an invalid hex string, with
         # things other than 0-9a-fA-F, so that they will fail in the UUID
         # decode, rather than with a UnicodeError.
-        self.stream.writelines([b"u", str(v).encode('latin-1')])
+        return b"u" + str(v).encode('latin-1')
     def _BINARY(self, v):
-        self.stream.writelines([b'b64"', base64.b64encode(v).strip(), b'"'])
+        return b'b64"' +  base64.b64encode(v).strip() + b'"'
 
     def _STRING(self, v):
-        self.stream.writelines([b"'", self._esc(v), b"'"])
+        if self.py2: # pragma: no cover
+            return b"'" + self._esc(v) + b"'"
+        return b"'" + v.translate(STR_ESC_TRANS_SINGLE).encode('utf-8') + b"'"
     def _URI(self, v):
-        self.stream.writelines([b'l"', self._esc(v, b'"'), b'"'])
+        if self.py2: # pragma: no cover
+            return  b'l"' + self._esc(v, b'"') + b'"'
+        return  b'l"' + v.translate(STR_ESC_TRANS_DOUBLE).encode('utf-8') + b'"'
     def _DATE(self, v):
-        self.stream.writelines([b'd"', _format_datestr(v), b'"'])
+        return b'd"' + _format_datestr(v) + b'"'
     def _ARRAY(self, v):
-        self.stream.write(b'[')
-        delim = b''
-        for item in v:
-            self.stream.write(delim)
-            self._generate(item)
-            delim = b','
-        self.stream.write(b']')
+        raise LLSDSerializationError("We should never end up here") # pragma: no cover
     def _MAP(self, v):
-        self.stream.write(b'{')
-        delim = b''
-        for key, value in v.items():
-            self.stream.writelines([delim, b"'", self._esc(UnicodeType(key)), b"':"])
-            self._generate(value)
-            delim = b','
-        self.stream.write(b'}')
-
+        raise LLSDSerializationError("We should never end up here") # pragma: no cover
     def _esc(self, data, quote=b"'"):
         return _str_to_bytes(data).replace(b"\\", b"\\\\").replace(quote, b'\\'+quote)
 
-    def _generate(self, something):
+    def _write(self, something):
         """
-        Serialize a python object to self.stream as application/llsd+notation
+        Serialize a python object to self.stream as application/llsd+notation.
 
-        :param something: a python object (typically a dict) to be serialized.
+        :param something: A python object (typically a dict) to be serialized.
+
+        NOTE: This is nearly identical to the above _write with the exception
+        that this one includes newlines and indentation.  Doing something clever
+        for the above may decrease performance for the common case, so it's been
+        split out.  We can probably revisit this, though.
         """
-        t = type(something)
-        handler = self.type_map.get(t)
-        if handler:
-            return handler(something)
-        elif isinstance(something, _LLSD):
-            return self.type_map[_LLSD](something)
-        else:
+
+        iter_stack = [[iter([something]), b"", None, b""]]
+        while True:
+            cur_iter, iter_type, iterable_obj, delim = iter_stack[-1]
             try:
-                return self._ARRAY(iter(something))
-            except TypeError:
-                raise LLSDSerializationError(
-                    "Cannot serialize unknown type: %s (%s)" % (t, something))
+                item = next(cur_iter)
+                self.stream.write(delim)
+                iter_stack[-1][3] = b","
+                if iter_type == b"}":
+                    if self.py2:  # pragma: no cover
+                        self.stream.writelines([b"'", self._esc(UnicodeType(item)), b"':"])
+                    else:
+                        # calling translate directly is a bit faster
+                        self.stream.writelines([b"'",
+                                                UnicodeType(item).translate(STR_ESC_TRANS_SINGLE).encode('utf-8'),
+                                                b"':"])
+                    item = iterable_obj[item] # pylint: disable=unsubscriptable-object
+                if isinstance(item, _LLSD):
+                    item = item.thing
+                item_type = type(item)
+                if not item_type in self.type_map:
+                    raise LLSDSerializationError(
+                        "Cannot serialize unknown type: %s (%s)" % (item_type, item))
+                tfunction = self.type_map[item_type]
 
-    # _write() method is an alias for _generate()
-    _write = _generate
+                if tfunction == self._MAP:
+                    self.stream.write(b'{')
+                    iter_stack.append([iter(list(item)), b"}", item, b""])
+                elif tfunction == self._ARRAY:
+                    self.stream.write(b'[')
+                    iter_stack.append([iter(item), b"]", None, b""])
+                else:
+                    self.stream.write(tfunction(item))
+            except StopIteration:
+                self.stream.write(iter_type)
+                iter_stack.pop()
+            if len(iter_stack) == 1:
+                break
 
 
 def format_notation(something):
