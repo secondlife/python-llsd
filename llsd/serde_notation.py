@@ -472,7 +472,7 @@ class LLSDNotationFormatter(LLSDBaseFormatter):
                 item = next(cur_iter)
                 self.stream.write(delim)
                 self.iter_stack[-1][3]  = b","
-                if iter_type == b"}":
+                if iterable_obj:
                     if self.py2:  # pragma: no cover
                         self.stream.writelines((b"'", self._esc(UnicodeType(item)), b"':"))
                     else:
@@ -481,7 +481,7 @@ class LLSDNotationFormatter(LLSDBaseFormatter):
                                                 UnicodeType(item).translate(STR_ESC_TRANS_SINGLE).encode('utf-8'),
                                                 b"':"))
                     item = iterable_obj[item] # pylint: disable=unsubscriptable-object
-                if isinstance(item, _LLSD):
+                while isinstance(item, _LLSD):
                     item = item.thing
                 item_type = type(item)
                 if item_type not in self.type_map:

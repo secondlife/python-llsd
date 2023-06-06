@@ -4,8 +4,8 @@ import io
 import struct
 import uuid
 
-from llsd.base import (_LLSD, LLSDBaseParser, LLSDSerializationError, BINARY_HEADER,
-                       _str_to_bytes, binary, is_integer, is_string, uri)
+from llsd.base import (_LLSD, LLSDBaseFormatter, LLSDBaseParser, LLSDSerializationError, BINARY_HEADER,
+                       LLSDSerializationError, UnicodeType, _str_to_bytes, binary, is_integer, is_string, uri)
 
 
 try:
@@ -148,6 +148,84 @@ class LLSDBinaryParser(LLSDBaseParser):
             self._error(exc, -8)
 
 
+
+class LLSDBinaryFormatter(LLSDBaseFormatter):
+    """
+    Serialize a python object as application/llsd+binary
+
+    See http://wiki.secondlife.com/wiki/LLSD#Notation_Serialization
+    """
+    def _LLSD(self, v):
+        raise LLSDSerializationError("We should never end up here") # pragma: no cover
+    def _UNDEF(self, v):
+        self.stream.write(b'!')
+    def _BOOLEAN(self, v):
+        self.stream.write(b'1' if v else b'0')
+    def _INTEGER(self, v):
+        try:
+            self.stream.writelines([b'i', struct.pack('!i', v)])
+        except (OverflowError, struct.error) as exc:
+            raise LLSDSerializationError(str(exc), v)
+    def _REAL(self, v):
+        try:
+            self.stream.writelines([b'r', struct.pack('!d', v)])
+        except SystemError as exc:
+            raise LLSDSerializationError(str(exc), something)
+    def _UUID(self, v):
+        self.stream.writelines([b'u', v.bytes])
+    def _BINARY(self, v):
+        self.stream.writelines([b'b', struct.pack('!i', len(v)), v])
+    def _STRING(self, v):
+        v = _str_to_bytes(v)
+        self.stream.writelines([b's', struct.pack('!i', len(v)), v])
+    def _URI(self, v):
+        uri_bytes = _str_to_bytes(v)
+        self.stream.writelines([b'l', struct.pack('!i', len(uri_bytes)), uri_bytes])
+    def _DATE(self, v):
+        if isinstance(v, datetime.datetime):
+            seconds_since_epoch = calendar.timegm(v.utctimetuple()) \
+                + v.microsecond // 1e6
+        if isinstance(v, datetime.date):
+            seconds_since_epoch = calendar.timegm(v.timetuple())
+        self.stream.writelines([b'd', struct.pack('<d', seconds_since_epoch)])
+    def _ARRAY(self, v):
+        self.stream.writelines([b'[', struct.pack('!i', len(v))])
+        self.iter_stack.append([iter(v), b"]", None])
+    def _MAP(self, v):
+        self.stream.writelines([b'{', struct.pack('!i', len(v))])
+        self.iter_stack.append([iter(v), b"}", v])
+
+    def _write(self, something):
+        """
+        Serialize a python object to self.stream as application/llsd+notation.
+
+        :param something: A python object (typically a dict) to be serialized.
+
+        """
+
+        self.stream.write(b'<?llsd/binary?>\n')
+        self.iter_stack = [[iter([something]), b"", None]]
+        while True:
+            cur_iter, iter_type, iterable_obj = self.iter_stack[-1]
+            try:
+                item = next(cur_iter)
+                if iterable_obj:
+                    key = _str_to_bytes(item)
+                    self.stream.writelines([b'k', struct.pack('!i', len(key)), key])
+                    item = iterable_obj[item] # pylint: disable=unsubscriptable-object
+                while isinstance(item, _LLSD):
+                    item = item.thing
+                item_type = type(item)
+                if item_type not in self.type_map:
+                    raise LLSDSerializationError(
+                        "Cannot serialize unknown type: %s (%s)" % (item_type, item))
+                self.type_map[item_type](item)
+            except StopIteration:
+                self.stream.write(iter_type)
+                self.iter_stack.pop()
+            if len(self.iter_stack) == 1:
+                break
+
 def format_binary(something):
     """
     Format application/llsd+binary to a python object.
@@ -157,14 +235,11 @@ def format_binary(something):
    :param something: a python object (typically a dict) to be serialized.
    :returns: Returns a LLSD binary formatted string.
     """
-    stream = io.BytesIO()
-    write_binary(stream, something)
-    return stream.getvalue()
+    return LLSDBinaryFormatter().format(something)
 
 
 def write_binary(stream, something):
-    stream.write(b'<?llsd/binary?>\n')
-    _write_binary_recurse(stream, something)
+    return LLSDBinaryFormatter().write(stream, something)
 
 
 def _write_binary_recurse(stream, something):

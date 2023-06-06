@@ -139,7 +139,7 @@ class LLSDXMLFormatter(LLSDBaseFormatter):
                                                 UnicodeType(item).translate(XML_ESC_TRANS).encode('utf-8'),
                                                 b'</key>'])
                     item = iterable_obj[item]
-                if isinstance(item, _LLSD):
+                while isinstance(item, _LLSD):
                     item = item.thing
                 item_type = type(item)
                 if not item_type in self.type_map:
