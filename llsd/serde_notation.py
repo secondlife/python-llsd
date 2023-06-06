@@ -1,6 +1,5 @@
 import base64
 import binascii
-from collections import deque
 import uuid
 
 from llsd.base import (_LLSD, B, LLSDBaseFormatter, LLSDBaseParser, NOTATION_HEADER,
@@ -420,13 +419,13 @@ class LLSDNotationFormatter(LLSDBaseFormatter):
     def _LLSD(self, v):
         raise LLSDSerializationError("We should never end up here") # pragma: no cover
     def _UNDEF(self, v):
-        return b'!'
+        self.stream.write(b'!')
     def _BOOLEAN(self, v):
-        return b'true' if v else b'false'
+        self.stream.write(b'true' if v else b'false')
     def _INTEGER(self, v):
-        return B("i%d") % v
+        self.stream.write(B("i%d") % v)
     def _REAL(self, v):
-        return B("r%r") % v
+        self.stream.write(B("r%r") % v)
     def _UUID(self, v):
         # latin-1 is the byte-to-byte encoding, mapping \x00-\xFF ->
         # \u0000-\u00FF. It's also the fastest encoding, I believe, from
@@ -436,24 +435,25 @@ class LLSDNotationFormatter(LLSDBaseFormatter):
         # error behavior in case someone passes an invalid hex string, with
         # things other than 0-9a-fA-F, so that they will fail in the UUID
         # decode, rather than with a UnicodeError.
-        return b"u" + str(v).encode('latin-1')
+        self.stream.writelines([b"u", str(v).encode('latin-1')])
     def _BINARY(self, v):
-        return b'b64"' +  base64.b64encode(v).strip() + b'"'
-
+        self.stream.writelines([b'b64"', base64.b64encode(v).strip(), b'"'])
     def _STRING(self, v):
         if self.py2: # pragma: no cover
-            return b"'" + self._esc(v) + b"'"
-        return b"'" + v.translate(STR_ESC_TRANS_SINGLE).encode('utf-8') + b"'"
+            return self.stream.writelines([b"'", self._esc(v), b"'"])
+        self.stream.writelines([b"'", v.translate(STR_ESC_TRANS_SINGLE).encode('utf-8'), b"'"])
     def _URI(self, v):
         if self.py2: # pragma: no cover
-            return  b'l"' + self._esc(v, b'"') + b'"'
-        return  b'l"' + v.translate(STR_ESC_TRANS_DOUBLE).encode('utf-8') + b'"'
+            return self.stream.writelines([b'l"', self._esc(v, b'"'), b'"'])
+        self.stream.writelines([b'l"', v.translate(STR_ESC_TRANS_DOUBLE).encode('utf-8'), b'"'])
     def _DATE(self, v):
-        return b'd"' + _format_datestr(v) + b'"'
+        self.stream.writelines([b'd"', _format_datestr(v), b'"'])
     def _ARRAY(self, v):
-        raise LLSDSerializationError("We should never end up here") # pragma: no cover
+        self.stream.write(b'[')
+        self.iter_stack.append([iter(v), b"]", None, b""])
     def _MAP(self, v):
-        raise LLSDSerializationError("We should never end up here") # pragma: no cover
+        self.stream.write(b'{')
+        self.iter_stack.append([iter(v), b"}", v, b""])
     def _esc(self, data, quote=b"'"):
         return _str_to_bytes(data).replace(b"\\", b"\\\\").replace(quote, b'\\'+quote)
 
@@ -463,21 +463,15 @@ class LLSDNotationFormatter(LLSDBaseFormatter):
 
         :param something: A python object (typically a dict) to be serialized.
 
-        NOTE: This is nearly identical to the above _write with the exception
-        that this one includes newlines and indentation.  Doing something clever
-        for the above may decrease performance for the common case, so it's been
-        split out.  We can probably revisit this, though.
         """
 
-        iter_stack = deque()
-        iter_stack.append((iter([something]), b"", None, b""))
+        self.iter_stack = [[iter([something]), b"", None, b""]]
         while True:
-            cur_iter, iter_type, iterable_obj, delim = iter_stack.pop()
+            cur_iter, iter_type, iterable_obj, delim = self.iter_stack[-1]
             try:
                 item = next(cur_iter)
                 self.stream.write(delim)
-                delim = b","
-                iter_stack.append((cur_iter, iter_type, iterable_obj, delim))
+                self.iter_stack[-1][3]  = b","
                 if iter_type == b"}":
                     if self.py2:  # pragma: no cover
                         self.stream.writelines((b"'", self._esc(UnicodeType(item)), b"':"))
@@ -490,22 +484,14 @@ class LLSDNotationFormatter(LLSDBaseFormatter):
                 if isinstance(item, _LLSD):
                     item = item.thing
                 item_type = type(item)
-                if not item_type in self.type_map:
+                if item_type not in self.type_map:
                     raise LLSDSerializationError(
                         "Cannot serialize unknown type: %s (%s)" % (item_type, item))
-                tfunction = self.type_map[item_type]
-
-                if tfunction == self._MAP:
-                    self.stream.write(b'{')
-                    iter_stack.append((iter(list(item)), b"}", item, b""))
-                elif tfunction == self._ARRAY:
-                    self.stream.write(b'[')
-                    iter_stack.append((iter(item), b"]", None, b""))
-                else:
-                    self.stream.write(tfunction(item))
+                self.type_map[item_type](item)
             except StopIteration:
                 self.stream.write(iter_type)
-            if len(iter_stack) == 1:
+                self.iter_stack.pop()
+            if len(self.iter_stack) == 1:
                 break
 
 

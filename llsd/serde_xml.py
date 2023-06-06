@@ -80,35 +80,37 @@ class LLSDXMLFormatter(LLSDBaseFormatter):
     def _LLSD(self, v):
         raise LLSDSerializationError("We should never end up here") # pragma: no cover
     def _UNDEF(self, _v):
-        return b'<undef/>'
+        self.stream.write(b'<undef/>')
     def _BOOLEAN(self, v):
         if v:
-            return b'<boolean>true</boolean>'
-        return b'<boolean>false</boolean>'
+            return self.stream.write(b'<boolean>true</boolean>')
+        self.stream.write(b'<boolean>false</boolean>')
     def _INTEGER(self, v):
-        return b'<integer>' + str(v).encode('utf-8') + b'</integer>'
+        self.stream.writelines([b'<integer>', str(v).encode('utf-8'), b'</integer>'])
     def _REAL(self, v):
-        return b'<real>' + str(v).encode('utf-8') + b'</real>'
+        self.stream.writelines([b'<real>', str(v).encode('utf-8'),  b'</real>'])
     def _UUID(self, v):
         if v.int == 0:
-            return b'<uuid/>'
-        return b'<uuid>' + str(v).encode('utf-8') + b'</uuid>'
+            return self.stream.write(b'<uuid/>')
+        self.stream.writelines([b'<uuid>', str(v).encode('utf-8'), b'</uuid>'])
     def _BINARY(self, v):
-        return b'<binary>' + base64.b64encode(v).strip() + b'</binary>'
+        self.stream.writelines([b'<binary>', base64.b64encode(v).strip(), b'</binary>'])
     def _STRING(self, v):
         if self.py2:    # pragma: no cover
-            return b'<string>' + _str_to_bytes(xml_esc(v)) + b'</string>'
-        return b'<string>' + v.translate(XML_ESC_TRANS).encode('utf-8') + b'</string>'
+            return self.stream.writelines([b'<string>', _str_to_bytes(xml_esc(v)), b'</string>'])
+        self.stream.writelines([b'<string>', v.translate(XML_ESC_TRANS).encode('utf-8'), b'</string>'])
     def _URI(self, v):
         if self.py2:    # pragma: no cover
-            return b'<uri>' + _str_to_bytes(xml_esc(v)) + b'</uri>'
-        return b'<uri>' + UnicodeType(v).translate(XML_ESC_TRANS).encode('utf-8') + b'</uri>'
+            return self.stream.writelines([b'<uri>', _str_to_bytes(xml_esc(v)), b'</uri>'])
+        self.stream.writelines([b'<uri>', UnicodeType(v).translate(XML_ESC_TRANS).encode('utf-8'), b'</uri>'])
     def _DATE(self, v):
-        return b'<date>' + _format_datestr(v) + b'</date>'
+        self.stream.writelines([b'<date>', _format_datestr(v), b'</date>'])
     def _ARRAY(self, v):
-        raise LLSDSerializationError("We should never end up here") # pragma: no cover
+        self.stream.write(b'<array>')
+        self.iter_stack.append((iter(v), b"array", None))
     def _MAP(self, v):
-        raise LLSDSerializationError("We should never end up here") # pragma: no cover
+        self.stream.write(b'<map>')
+        self.iter_stack.append((iter(v), b"map", v))
 
     def _write(self, something):
         """
@@ -119,23 +121,23 @@ class LLSDXMLFormatter(LLSDBaseFormatter):
         self.stream.write(b'<?xml version="1.0" ?>'
                           b'<llsd>')
 
-        iter_stack = [(iter([something]), b"", None)]
+        self.iter_stack = [(iter([something]), b"", None)]
         while True:
-            cur_iter, iter_type, iterable_obj = iter_stack[-1]
+            cur_iter, iter_type, iterable_obj = self.iter_stack[-1]
             try:
                 item = next(cur_iter)
                 if iter_type == b"map":
 
                     if self.py2: # pragma: no cover
-                        self.stream.write(b'<key>' +
-                                          _str_to_bytes(xml_esc(UnicodeType(item))) +
-                                          b'</key>')
+                        self.stream.writelines([b'<key>',
+                                                _str_to_bytes(xml_esc(UnicodeType(item))),
+                                                b'</key>'])
                     else:
                         # fair performance improvement by explicitly doing the
                         # translate for py3 instead of calling xml_esc
-                        self.stream.write(b'<key>' +
-                        UnicodeType(item).translate(XML_ESC_TRANS).encode('utf-8') +
-                                          b'</key>')
+                        self.stream.writelines([b'<key>',
+                                                UnicodeType(item).translate(XML_ESC_TRANS).encode('utf-8'),
+                                                b'</key>'])
                     item = iterable_obj[item]
                 if isinstance(item, _LLSD):
                     item = item.thing
@@ -143,20 +145,11 @@ class LLSDXMLFormatter(LLSDBaseFormatter):
                 if not item_type in self.type_map:
                     raise LLSDSerializationError(
                         "Cannot serialize unknown type: %s (%s)" % (item_type, item))
-                tfunction = self.type_map[item_type]
-
-                if tfunction == self._MAP:
-                    self.stream.write(b'<map>')
-                    iter_stack.append((iter(list(item)), b"map", item))
-                elif tfunction == self._ARRAY:
-                    self.stream.write(b'<array>')
-                    iter_stack.append((iter(item), b"array", None))
-                else:
-                    self.stream.write(tfunction(item))
+                self.type_map[item_type](item)
             except StopIteration:
-                self.stream.write(b'</' + iter_type + b'>')
-                iter_stack.pop()
-            if len(iter_stack) == 1:
+                self.stream.writelines([b'</', iter_type, b'>'])
+                self.iter_stack.pop()
+            if len(self.iter_stack) == 1:
                 break
         self.stream.write(b'</llsd>')
 
@@ -186,6 +179,16 @@ class LLSDXMLPrettyFormatter(LLSDXMLFormatter):
         else:
             self._indent_atom = indent_atom
 
+    def _ARRAY(self, v):
+        self.stream.write(b'<array>')
+        self._indent_level += 1
+        self.iter_stack.append((iter(v), b"array", None))
+
+    def _MAP(self, v):
+        self.stream.write(b'<map>')
+        self._indent_level += 1
+        self.iter_stack.append((iter(v), b"map", v))
+
     def _indent(self):
         "Write an indentation based on the atom and indentation level."
         self.stream.writelines([self._indent_atom] * self._indent_level)
@@ -204,9 +207,9 @@ class LLSDXMLPrettyFormatter(LLSDXMLFormatter):
         self.stream.write(b'<?xml version="1.0" ?>\n'
                           b'<llsd>\n')
 
-        iter_stack = [(iter([something]), b"", None)]
+        self.iter_stack = [(iter([something]), b"", None)]
         while True:
-            cur_iter, iter_type, iterable_obj = iter_stack[-1]
+            cur_iter, iter_type, iterable_obj = self.iter_stack[-1]
             try:
                 item = next(cur_iter)
                 if iter_type == b"map":
@@ -227,28 +230,16 @@ class LLSDXMLPrettyFormatter(LLSDXMLFormatter):
                 if not item_type in self.type_map:
                     raise LLSDSerializationError(
                         "Cannot serialize unknown type: %s (%s)" % (item_type, item))
-                tfunction = self.type_map[item_type]
 
-                if tfunction == self._MAP:
-                    self._indent()
-                    self.stream.write(b'<map>\n')
-                    self._indent_level += 1
-                    iter_stack.append((iter(list(item)), b"map", item))
-                elif tfunction == self._ARRAY:
-                    self._indent()
-                    self.stream.write(b'<array>\n')
-                    self._indent_level += 1
-                    iter_stack.append((iter(item), b"array", None))
-                else:
-                    self._indent()
-                    self.stream.write(tfunction(item))
-                    self.stream.write(b'\n')
+                self._indent()
+                self.type_map[item_type](item)
+                self.stream.write(b'\n')
             except StopIteration:
                 self._indent_level -= 1
                 self._indent()
                 self.stream.write(b'</' + iter_type + b'>\n')
-                iter_stack.pop()
-            if len(iter_stack) == 1:
+                self.iter_stack.pop()
+            if len(self.iter_stack) == 1:
                 break
         self.stream.write(b'</llsd>\n')
 

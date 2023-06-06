@@ -105,6 +105,17 @@ def build_wide_xml():
     return wide_data
 _wide_bench_data = build_wide_xml()
 
+def build_wide_array_xml():
+    
+    wide_xml = b"""
+<?xml version="1.0" encoding="UTF-8"?><llsd><map><key>wide_array</key><array>"
+"""
+    wide_data = []
+    for i in range(100000):
+        wide_data.append({"item1":2.345, "item2": [1,2,3], "item3": "string", "item4":{"subitem": llsd.uri("http://foo.bar.com")}})
+    return wide_data
+_wide_array_bench_data = build_wide_array_xml()
+
 def bench_stream(parse, stream):
     ret = parse(stream)
     stream.seek(0)
@@ -163,3 +174,6 @@ def test_format_notation_deep(benchmark):
 
 def test_format_notation_wide(benchmark):
     benchmark(llsd.format_notation, _wide_bench_data)
+
+def test_format_notation_wide_array(benchmark):
+    benchmark(llsd.format_notation, _wide_array_bench_data)
