@@ -406,13 +406,11 @@ class LLSDXMLParser:
                     if key is None:
                         key = ''
                     value = next(node_iter)
-                    if value.tag not in self.NODE_HANDLERS:
-                        raise LLSDParseError("Unknown value type %s" % something.tag)
                     cur_result[key] = self.NODE_HANDLERS[value.tag](value)
                 elif iterable.tag == "array":
-                    if value.tag not in self.NODE_HANDLERS:
-                        raise LLSDParseError("Unknown value type %s" % something.tag)
                     cur_result.append(self.NODE_HANDLERS[value.tag](value))
+            except KeyError as err:
+                raise LLSDParseError("Unknown value type: " + str(err))
             except StopIteration:
                 node_iter, iterable, cur_result = self.parse_stack.pop()
                 if len(self.parse_stack) == 0:
