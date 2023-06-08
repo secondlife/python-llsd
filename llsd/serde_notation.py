@@ -467,11 +467,12 @@ class LLSDNotationFormatter(LLSDBaseFormatter):
 
         self.iter_stack = [[iter([something]), b"", None, b""]]
         while True:
-            cur_iter, iter_type, iterable_obj, delim = self.iter_stack[-1]
+            stack_top = self.iter_stack[-1]
+            cur_iter, iter_type, iterable_obj, delim = stack_top
             try:
                 item = next(cur_iter)
                 self.stream.write(delim)
-                self.iter_stack[-1][3]  = b","
+                stack_top[3]  = b","
                 if iterable_obj:
                     if self.py2:  # pragma: no cover
                         self.stream.writelines((b"'", self._esc(UnicodeType(item)), b"':"))

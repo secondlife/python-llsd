@@ -1,11 +1,12 @@
 import base64
+import binascii
 import io
 import re
-import types
+import uuid
 
 from llsd.base import (_LLSD, ALL_CHARS, LLSDBaseParser, LLSDBaseFormatter, XML_HEADER,
                        LLSDParseError, LLSDSerializationError, UnicodeType,
-                       _format_datestr, _str_to_bytes, _to_python, is_unicode, PY2)
+                       _format_datestr, _str_to_bytes, is_unicode, PY2, uri, binary, _parse_datestr)
 from llsd.fastest_elementtree import ElementTreeError, fromstring, parse as _parse
 
 INVALID_XML_BYTES = b'\x00\x01\x02\x03\x04\x05\x06\x07\x08\x0b\x0c'\
@@ -138,7 +139,7 @@ class LLSDXMLFormatter(LLSDBaseFormatter):
                         self.stream.writelines([b'<key>',
                                                 UnicodeType(item).translate(XML_ESC_TRANS).encode('utf-8'),
                                                 b'</key>'])
-                    item = iterable_obj[item]
+                    item = iterable_obj[item] # pylint: disable=unsubscriptable-object
                 while isinstance(item, _LLSD):
                     item = item.thing
                 item_type = type(item)
@@ -178,6 +179,7 @@ class LLSDXMLPrettyFormatter(LLSDXMLFormatter):
             self._indent_atom = b'  '
         else:
             self._indent_atom = indent_atom
+        self.iter_stack = None
 
     def _ARRAY(self, v):
         self.stream.write(b'<array>')
@@ -283,6 +285,140 @@ def write_pretty_xml(stream, something):
     return LLSDXMLPrettyFormatter().write(stream, something)
 
 
+class LLSDXMLParser:
+    def __init__(self):
+        "Construct an xml node parser."
+
+        self.NODE_HANDLERS = {
+            "undef": lambda x: None,
+            "boolean": self._bool_to_python,
+            "integer": self._int_to_python,
+            "real": self._real_to_python,
+            "uuid": self._uuid_to_python,
+            "string": self._str_to_python,
+            "binary": self._bin_to_python,
+            "date": self._date_to_python,
+            "uri": self._uri_to_python,
+            "map": self._map_to_python,
+            "array": self._array_to_python,
+        }
+
+        self.parse_stack = []
+
+    def _bool_to_python(self, node):
+        "Convert boolean node to a python object."
+        val = node.text or ''
+        try:
+            # string value, accept 'true' or 'True' or whatever
+            return (val.lower() in ('true', '1', '1.0'))
+        except AttributeError:
+            # not a string (no lower() method), use normal Python rules
+            return bool(val)
+
+    def _int_to_python(self, node):
+        "Convert integer node to a python object."
+        val = node.text or ''
+        if not val.strip():
+            return 0
+        return int(val)
+
+    def _real_to_python(self, node):
+        "Convert floating point node to a python object."
+        val = node.text or ''
+        if not val.strip():
+            return 0.0
+        return float(val)
+
+    def _uuid_to_python(self, node):
+        "Convert uuid node to a python object."
+        if node.text:
+            return uuid.UUID(hex=node.text)
+        return uuid.UUID(int=0)
+
+    def _str_to_python(self, node):
+        "Convert string node to a python object."
+        return node.text or ''
+
+    def _bin_to_python(self, node):
+        base = node.get('encoding') or 'base64'
+        try:
+            if base == 'base16':
+                # parse base16 encoded data
+                return binary(base64.b16decode(node.text or ''))
+            elif base == 'base64':
+                # parse base64 encoded data
+                return binary(base64.b64decode(node.text or ''))
+            raise LLSDParseError("Parser doesn't support %s encoding" % base)
+
+        except binascii.Error as exc:
+            # convert exception class so it's more catchable
+            raise LLSDParseError("Encoded binary data: " + str(exc))
+        except TypeError as exc:
+            # convert exception class so it's more catchable
+            raise LLSDParseError("Bad binary data: " + str(exc))
+
+    def _date_to_python(self, node):
+        "Convert date node to a python object."
+        val = node.text or ''
+        if not val:
+            val = "1970-01-01T00:00:00Z"
+        return _parse_datestr(val)
+
+    def _uri_to_python(self, node):
+        "Convert uri node to a python object."
+        val = node.text or ''
+        return uri(val)
+
+    def _map_to_python(self, node):
+        "Convert map node to a python object."
+        self.parse_stack.append([iter(node), node, {}])
+        return self.parse_stack[-1][2]
+
+    def _array_to_python(self, node):
+        "Convert array node to a python object."
+        self.parse_stack.append([iter(node), node, []])
+        return self.parse_stack[-1][2]
+
+    def parse_node(self, something):
+        """
+        Parse an xml node tree via iteration.
+        :param something: The xml node to parse.
+        :returns: Returns a python object.
+        """
+        if something.tag == "map":
+            cur_result = {}
+        elif something.tag == "array":
+            cur_result = []
+        else:
+            if something.tag not in self.NODE_HANDLERS:
+                raise LLSDParseError("Unknown value type %s" % something.tag)
+            return self.NODE_HANDLERS[something.tag](something)
+
+        self.parse_stack = [[iter(something), something, cur_result]]
+        while True:
+            node_iter, iterable, cur_result = self.parse_stack[-1]
+            try:
+                value = next(node_iter)
+                if iterable.tag == "map":
+                    if value.tag != "key":
+                        raise LLSDParseError("Expected 'key', got %s" % value.tag)
+                    key = value.text
+                    if key is None:
+                        key = ''
+                    value = next(node_iter)
+                    if value.tag not in self.NODE_HANDLERS:
+                        raise LLSDParseError("Unknown value type %s" % something.tag)
+                    cur_result[key] = self.NODE_HANDLERS[value.tag](value)
+                elif iterable.tag == "array":
+                    if value.tag not in self.NODE_HANDLERS:
+                        raise LLSDParseError("Unknown value type %s" % something.tag)
+                    cur_result.append(self.NODE_HANDLERS[value.tag](value))
+            except StopIteration:
+                node_iter, iterable, cur_result = self.parse_stack.pop()
+                if len(self.parse_stack) == 0:
+                    break
+        return cur_result
+
 def parse_xml(something):
     """
     This is the basic public interface for parsing llsd+xml.
@@ -296,6 +432,8 @@ def parse_xml(something):
     # If we matched the header, then parse whatever follows, else parse the
     # original bytes object or stream.
     return parse_xml_nohdr(parser)
+
+
 
 
 def parse_xml_nohdr(baseparser):
@@ -326,7 +464,7 @@ def parse_xml_nohdr(baseparser):
     if element.tag != 'llsd':
         raise LLSDParseError("Invalid XML Declaration")
     # Extract its contents.
-    return _to_python(element[0])
+    return LLSDXMLParser().parse_node(element[0])
 
 
 def format_xml(something):
