@@ -1,5 +1,6 @@
 import base64
 import binascii
+from collections import deque
 import io
 import re
 import uuid
@@ -108,10 +109,10 @@ class LLSDXMLFormatter(LLSDBaseFormatter):
         self.stream.writelines([b'<date>', _format_datestr(v), b'</date>'])
     def _ARRAY(self, v):
         self.stream.write(b'<array>')
-        self.iter_stack.append((iter(v), b"array", None))
+        self.iter_stack.appendleft((iter(v), b"array", None))
     def _MAP(self, v):
         self.stream.write(b'<map>')
-        self.iter_stack.append((iter(v), b"map", v))
+        self.iter_stack.appendleft((iter(v), b"map", v))
 
     def _write(self, something):
         """
@@ -122,9 +123,9 @@ class LLSDXMLFormatter(LLSDBaseFormatter):
         self.stream.write(b'<?xml version="1.0" ?>'
                           b'<llsd>')
 
-        self.iter_stack = [(iter([something]), b"", None)]
+        self.iter_stack = deque([(iter([something]), b"", None)])
         while True:
-            cur_iter, iter_type, iterable_obj = self.iter_stack[-1]
+            cur_iter, iter_type, iterable_obj = self.iter_stack[0]
             try:
                 item = next(cur_iter)
                 if iter_type == b"map":
@@ -149,7 +150,7 @@ class LLSDXMLFormatter(LLSDBaseFormatter):
                 self.type_map[item_type](item)
             except StopIteration:
                 self.stream.writelines([b'</', iter_type, b'>'])
-                self.iter_stack.pop()
+                self.iter_stack.popleft()
             if len(self.iter_stack) == 1:
                 break
         self.stream.write(b'</llsd>')
@@ -303,7 +304,7 @@ class LLSDXMLParser:
             "array": self._array_to_python,
         }
 
-        self.parse_stack = []
+        self.parse_stack = deque([])
 
     def _bool_to_python(self, node):
         "Convert boolean node to a python object."
@@ -371,13 +372,17 @@ class LLSDXMLParser:
 
     def _map_to_python(self, node):
         "Convert map node to a python object."
-        self.parse_stack.append([iter(node), node, {}])
-        return self.parse_stack[-1][2]
+        new_result = {}
+        new_stack_entry = [iter(node), node, new_result]
+        self.parse_stack.appendleft(new_stack_entry)
+        return new_result
 
     def _array_to_python(self, node):
         "Convert array node to a python object."
-        self.parse_stack.append([iter(node), node, []])
-        return self.parse_stack[-1][2]
+        new_result = []
+        new_stack_entry = [iter(node), node, new_result]
+        self.parse_stack.appendleft(new_stack_entry)
+        return new_result
 
     def parse_node(self, something):
         """
@@ -394,9 +399,9 @@ class LLSDXMLParser:
                 raise LLSDParseError("Unknown value type %s" % something.tag)
             return self.NODE_HANDLERS[something.tag](something)
 
-        self.parse_stack = [[iter(something), something, cur_result]]
+        self.parse_stack.appendleft([iter(something), something, cur_result])
         while True:
-            node_iter, iterable, cur_result = self.parse_stack[-1]
+            node_iter, iterable, cur_result = self.parse_stack[0]
             try:
                 value = next(node_iter)
                 if iterable.tag == "map":
@@ -412,7 +417,7 @@ class LLSDXMLParser:
             except KeyError as err:
                 raise LLSDParseError("Unknown value type: " + str(err))
             except StopIteration:
-                node_iter, iterable, cur_result = self.parse_stack.pop()
+                node_iter, iterable, cur_result = self.parse_stack.popleft()
                 if len(self.parse_stack) == 0:
                     break
         return cur_result

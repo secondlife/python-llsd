@@ -1,4 +1,5 @@
 import calendar
+from collections import deque
 import datetime
 import io
 import struct
@@ -22,7 +23,7 @@ class LLSDBinaryParser(LLSDBaseParser):
 
     See http://wiki.secondlife.com/wiki/LLSD#Binary_Serialization
     """
-    __slots__ = ['_dispatch', '_keep_binary']
+    __slots__ = ['_dispatch', '_keep_binary', 'parse_stack']
 
     def __init__(self):
         super(LLSDBinaryParser, self).__init__()
@@ -63,6 +64,7 @@ class LLSDBinaryParser(LLSDBaseParser):
         # entries in _dispatch.
         for c, func in _dispatch_dict.items():
             self._dispatch[ord(c)] = func
+        self.parse_stack = deque([])
 
     def parse(self, something, ignore_binary = False):
         """
@@ -81,46 +83,60 @@ class LLSDBinaryParser(LLSDBaseParser):
             self._error(exc)
 
     def _parse(self):
-        "The actual parser which is called recursively when necessary."
+        "The actual iterative parser."
         cc = self._getc()
-        try:
-            func = self._dispatch[ord(cc)]
-        except IndexError:
-            self._error("invalid binary token", -1)
+        if cc == b'{':
+            cur_result = {}
+            max_size = struct.unpack("!i", self._getc(4))[0]
+        elif cc == b'[':
+            cur_result = []
+            max_size = struct.unpack("!i", self._getc(4))[0]
         else:
-            return func()
+            return self._dispatch[ord(cc)]()
+        self.parse_stack.appendleft([0, max_size, cc, cur_result])
+        while True:
+            item_count, max_size, iter_type, cur_result = self.parse_stack[0]
+            cc = self._getc()
+            if iter_type == b'{':
+                if cc == b'}':
+                    item_count, max_size, iter_type, cur_result = self.parse_stack.popleft()
+                    if item_count != max_size:
+                        self._error("Invalid map close token")
+                else:
+                    if cc == b'k':
+                        key = self._parse_string()
+                    elif cc in (b"'", b'"'):
+                        key = self._parse_string_delim(cc)
+                    else:
+                        self._error("invalid map key %d" % ord(cc), -1)
+                    cc = self._getc()
+                    self.parse_stack[0][0]  = item_count + 1
+                    cur_result[key] = self._dispatch[ord(cc)]()
+            elif iter_type == b'[':
+                if cc == b']':
+                    item_count, max_size, iter_type, cur_result = self.parse_stack.popleft()
+                    if item_count != max_size:
+                        self._error("Invalid array close token")
+                else:
+                    self.parse_stack[0][0]  = item_count + 1
+                    cur_result.append(self._dispatch[ord(cc)]())
+            if (len(self.parse_stack) == 0):
+                return cur_result
 
     def _parse_map(self):
         "Parse a single llsd map"
-        rv = {}
-        size = struct.unpack("!i", self._getc(4))[0]
-        count = 0
-        cc = self._getc()
-        key = b''
-        while (cc != b'}') and (count < size):
-            if cc == b'k':
-                key = self._parse_string()
-            elif cc in (b"'", b'"'):
-                key = self._parse_string_delim(cc)
-            else:
-                self._error("invalid map key", -1)
-            value = self._parse()
-            rv[key] = value
-            count += 1
-            cc = self._getc()
-        if cc != b'}':
-            self._error("invalid map close token")
-        return rv
+        result = {}
+        max_size = struct.unpack("!i", self._getc(4))[0]
+        self.parse_stack.appendleft([0, max_size, b'{', result])
+        return result
 
     def _parse_array(self):
         "Parse a single llsd array"
-        rv = []
-        size = struct.unpack("!i", self._getc(4))[0]
-        for count in range(size):
-            rv.append(self._parse())
-        if self._getc() != b']':
-            self._error("invalid array close token")
-        return rv
+        result = []
+        max_size = self._getc(4)
+        max_size = struct.unpack("!i", max_size)[0]
+        self.parse_stack.appendleft([0, max_size, b'[', result])
+        return result
 
     def _parse_string(self):
         try:

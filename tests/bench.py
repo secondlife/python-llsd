@@ -190,3 +190,7 @@ def test_format_binary_wide_array(benchmark):
 def test_parse_xml_deep(benchmark):
     deep_data = llsd.format_xml(_deep_bench_data)
     benchmark(llsd.parse_xml, deep_data)
+
+def test_parse_binary_deep(benchmark):
+    deep_data = llsd.format_binary(_deep_bench_data)
+    benchmark(llsd.parse_binary, deep_data)

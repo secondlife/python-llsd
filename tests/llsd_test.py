@@ -277,12 +277,12 @@ class LLSDNotationUnitTest(unittest.TestCase):
         # simple array
         array_notation = b"['foo', 'bar']"
         # composite array
-        array_within_array_notation = b"['foo', 'bar',['foo', 'bar']]"
+        array_within_array_notation = b"['foo', 'bar',['foo1', 'bar1']]"
         # blank array
         blank_array_notation = b"[]"
 
         python_array = [str("foo"), "bar"]
-        python_array_within_array = ["foo", "bar", ["foo", "bar"]]
+        python_array_within_array = ["foo", "bar", ["foo1", "bar1"]]
         python_blank_array = []
 
         self.assertNotationRoundtrip(python_array, array_notation)
@@ -616,8 +616,8 @@ class LLSDBinaryUnitTest(unittest.TestCase):
 <string>foo</string>\
 <string>bar</string>\
 <array>\
-<string>foo</string>\
-<string>bar</string>\
+<string>foo1</string>\
+<string>bar1</string>\
 </array>\
 </array>\
 </llsd>"
@@ -627,7 +627,7 @@ class LLSDBinaryUnitTest(unittest.TestCase):
 </llsd>"
 
         python_array = ["foo", "bar"]
-        python_array_within_array = ["foo", "bar", ["foo", "bar"]]
+        python_array_within_array = ["foo", "bar", ["foo1", "bar1"]]
 
         self.assertEqual(
             python_array,
