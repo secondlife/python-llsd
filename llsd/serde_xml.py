@@ -13,6 +13,8 @@ from llsd.fastest_elementtree import ElementTreeError, fromstring, parse as _par
 INVALID_XML_BYTES = b'\x00\x01\x02\x03\x04\x05\x06\x07\x08\x0b\x0c'\
                     b'\x0e\x0f\x10\x11\x12\x13\x14\x15\x16\x17\x18'\
                     b'\x19\x1a\x1b\x1c\x1d\x1e\x1f'
+INVALID_XML_RE = re.compile(r'[\x00-\x08\x0b\x0c\x0e-\x1f]')
+
 
 XML_ESC_TRANS = {}
 if not PY2:
@@ -24,8 +26,6 @@ if not PY2:
 
     for x in INVALID_XML_BYTES:
         XML_ESC_TRANS[x] = None
-
-INVALID_XML_RE = re.compile(r'[\x00-\x08\x0b\x0c\x0e-\x1f]')
 
 
 def remove_invalid_xml_bytes(b):
@@ -75,9 +75,10 @@ class LLSDXMLFormatter(LLSDBaseFormatter):
     """
 
     def __init__(self, indent_atom = None):
-        "Construct a pretty serializer."
+        "Construct a serializer."
         # Call the super class constructor so that we have the type map
         super(LLSDXMLFormatter, self).__init__()
+        self.iter_stack = deque([])
 
     def _LLSD(self, v):
         raise LLSDSerializationError("We should never end up here") # pragma: no cover
@@ -98,13 +99,17 @@ class LLSDXMLFormatter(LLSDBaseFormatter):
     def _BINARY(self, v):
         self.stream.writelines([b'<binary>', base64.b64encode(v).strip(), b'</binary>'])
     def _STRING(self, v):
-        if self.py2:    # pragma: no cover
+        # We don't simply have a function that encapsulates the PY2 vs PY3 calls,
+        # as that results in another function call and is slightly less performant
+        if PY2:    # pragma: no cover
             return self.stream.writelines([b'<string>', _str_to_bytes(xml_esc(v)), b'</string>'])
         self.stream.writelines([b'<string>', v.translate(XML_ESC_TRANS).encode('utf-8'), b'</string>'])
     def _URI(self, v):
-        if self.py2:    # pragma: no cover
+        # We don't simply have a function that encapsulates the PY2 vs PY3 calls,
+        # as that results in another function call and is slightly less performant
+        if PY2:    # pragma: no cover
             return self.stream.writelines([b'<uri>', _str_to_bytes(xml_esc(v)), b'</uri>'])
-        self.stream.writelines([b'<uri>', UnicodeType(v).translate(XML_ESC_TRANS).encode('utf-8'), b'</uri>'])
+        self.stream.writelines([b'<uri>', str(v).translate(XML_ESC_TRANS).encode('utf-8'), b'</uri>'])
     def _DATE(self, v):
         self.stream.writelines([b'<date>', _format_datestr(v), b'</date>'])
     def _ARRAY(self, v):
@@ -123,14 +128,16 @@ class LLSDXMLFormatter(LLSDBaseFormatter):
         self.stream.write(b'<?xml version="1.0" ?>'
                           b'<llsd>')
 
-        self.iter_stack = deque([(iter([something]), b"", None)])
+        self.iter_stack.appendleft((iter([something]), b"", None))
         while True:
             cur_iter, iter_type, iterable_obj = self.iter_stack[0]
             try:
                 item = next(cur_iter)
                 if iter_type == b"map":
 
-                    if self.py2: # pragma: no cover
+                    # We don't simply have a function that encapsulates the PY2 vs PY3 calls,
+                    # as that results in another function call and is slightly less performant
+                    if PY2: # pragma: no cover
                         self.stream.writelines([b'<key>',
                                                 _str_to_bytes(xml_esc(UnicodeType(item))),
                                                 b'</key>'])
@@ -138,7 +145,7 @@ class LLSDXMLFormatter(LLSDBaseFormatter):
                         # fair performance improvement by explicitly doing the
                         # translate for py3 instead of calling xml_esc
                         self.stream.writelines([b'<key>',
-                                                UnicodeType(item).translate(XML_ESC_TRANS).encode('utf-8'),
+                                                str(item).translate(XML_ESC_TRANS).encode('utf-8'),
                                                 b'</key>'])
                     item = iterable_obj[item] # pylint: disable=unsubscriptable-object
                 while isinstance(item, _LLSD):
@@ -217,14 +224,16 @@ class LLSDXMLPrettyFormatter(LLSDXMLFormatter):
                 item = next(cur_iter)
                 if iter_type == b"map":
                     self._indent()
-                    if self.py2:  # pragma: no cover
+                    # We don't simply have a function that encapsulates the PY2 vs PY3 calls,
+                    # as that results in another function call and is slightly less performant
+                    if PY2:  # pragma: no cover
                         self.stream.write(b'<key>' +
                                           _str_to_bytes(xml_esc(UnicodeType(item))) +
                                           b'</key>')
                     else:
                         # calling translate directly is a bit faster
                         self.stream.write(b'<key>' +
-                        UnicodeType(item).translate(XML_ESC_TRANS).encode('utf-8') +
+                        str(item).translate(XML_ESC_TRANS).encode('utf-8') +
                                           b'</key>\n')
                     item = iterable_obj[item] # pylint: disable=unsubscriptable-object
                 if isinstance(item, _LLSD):

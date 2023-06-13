@@ -264,65 +264,6 @@ def write_binary(stream, something):
     return LLSDBinaryFormatter().write(stream, something)
 
 
-def _write_binary_recurse(stream, something):
-    "Binary formatter workhorse."
-    if something is None:
-        stream.write(b'!')
-    elif isinstance(something, _LLSD):
-        _write_binary_recurse(stream, something.thing)
-    elif isinstance(something, bool):
-        stream.write(b'1' if something else b'0')
-    elif is_integer(something):
-        try:
-            stream.writelines([b'i', struct.pack('!i', something)])
-        except (OverflowError, struct.error) as exc:
-            raise LLSDSerializationError(str(exc), something)
-    elif isinstance(something, float):
-        try:
-            stream.writelines([b'r', struct.pack('!d', something)])
-        except SystemError as exc:
-            raise LLSDSerializationError(str(exc), something)
-    elif isinstance(something, uuid.UUID):
-        stream.writelines([b'u', something.bytes])
-    elif isinstance(something, binary):
-        stream.writelines([b'b', struct.pack('!i', len(something)), something])
-    elif is_string(something):
-        something = _str_to_bytes(something)
-        stream.writelines([b's', struct.pack('!i', len(something)), something])
-    elif isinstance(something, uri):
-        stream.writelines([b'l', struct.pack('!i', len(something)), something])
-    elif isinstance(something, datetime.datetime):
-        seconds_since_epoch = calendar.timegm(something.utctimetuple()) \
-                              + something.microsecond // 1e6
-        stream.writelines([b'd', struct.pack('<d', seconds_since_epoch)])
-    elif isinstance(something, datetime.date):
-        seconds_since_epoch = calendar.timegm(something.timetuple())
-        stream.writelines([b'd', struct.pack('<d', seconds_since_epoch)])
-    elif isinstance(something, (list, tuple)):
-        _write_list(stream, something)
-    elif isinstance(something, dict):
-        stream.writelines([b'{', struct.pack('!i', len(something))])
-        for key, value in something.items():
-            key = _str_to_bytes(key)
-            stream.writelines([b'k', struct.pack('!i', len(key)), key])
-            _write_binary_recurse(stream, value)
-        stream.write(b'}')
-    else:
-        try:
-            return _write_list(stream, list(something))
-        except TypeError:
-            raise LLSDSerializationError(
-                "Cannot serialize unknown type: %s (%s)" %
-                (type(something), something))
-
-
-def _write_list(stream, something):
-    stream.writelines([b'[', struct.pack('!i', len(something))])
-    for item in something:
-        _write_binary_recurse(stream, item)
-    stream.write(b']')
-
-
 def parse_binary(something):
     """
     This is the basic public interface for parsing llsd+binary.

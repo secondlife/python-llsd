@@ -443,11 +443,11 @@ class LLSDNotationFormatter(LLSDBaseFormatter):
     def _BINARY(self, v):
         self.stream.writelines([b'b64"', base64.b64encode(v).strip(), b'"'])
     def _STRING(self, v):
-        if self.py2: # pragma: no cover
+        if PY2: # pragma: no cover
             return self.stream.writelines([b"'", self._esc(v), b"'"])
         self.stream.writelines([b"'", v.translate(STR_ESC_TRANS_SINGLE).encode('utf-8'), b"'"])
     def _URI(self, v):
-        if self.py2: # pragma: no cover
+        if PY2: # pragma: no cover
             return self.stream.writelines([b'l"', self._esc(v, b'"'), b'"'])
         self.stream.writelines([b'l"', v.translate(STR_ESC_TRANS_DOUBLE).encode('utf-8'), b'"'])
     def _DATE(self, v):
@@ -478,7 +478,7 @@ class LLSDNotationFormatter(LLSDBaseFormatter):
                 self.stream.write(delim)
                 stack_top[3]  = b","
                 if iterable_obj:
-                    if self.py2:  # pragma: no cover
+                    if PY2:  # pragma: no cover
                         self.stream.writelines((b"'", self._esc(UnicodeType(item)), b"':"))
                     else:
                         # calling translate directly is a bit faster

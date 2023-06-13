@@ -221,7 +221,6 @@ class LLSDBaseFormatter(object):
     def __init__(self):
         "Construct a new formatter dispatch table."
         self.stream = None
-        self.py2 = PY2
         self.type_map = {
             type(None):          self._UNDEF,
             undef:               self._UNDEF,
