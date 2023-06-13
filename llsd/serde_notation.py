@@ -1,5 +1,6 @@
 import base64
 import binascii
+from collections import deque
 import uuid
 
 from llsd.base import (_LLSD, B, LLSDBaseFormatter, LLSDBaseParser, NOTATION_HEADER,
@@ -75,6 +76,7 @@ class LLSDNotationParser(LLSDBaseParser):
         # Then fill in specific entries based on the dict above.
         for c, func in _dispatch_dict.items():
             self._dispatch[ord(c)] = func
+        self.parse_stack = deque([])
 
     def parse(self, something, ignore_binary = False):
         """
@@ -111,15 +113,47 @@ class LLSDNotationParser(LLSDBaseParser):
             return b''.join(content)
 
     def _parse(self, cc):
-        "The notation parser workhorse."
-        try:
-            func = self._dispatch[ord(cc)]
-        except IndexError:
-            # output error if the token was out of range
-            self._error("Invalid notation token")
+        "The actual iterative parser."
+        if cc == b'{':
+            cur_result = {}
+        elif cc == b'[':
+            cur_result = []
         else:
-            # pass the lookahead character that selected this func
-            return func(cc)
+            return self._dispatch[ord(cc)](cc)
+        self.parse_stack.appendleft([cc, cur_result])
+        while True:
+            iter_type, cur_result = self.parse_stack[0]
+            cc = self._getc()
+            while cc.isspace() or cc == b',':
+                cc = self._getc()
+            if cc is None:
+                self._error("Unclosed collection")
+            if iter_type == b'{':
+                if cc == b'}':
+                    iter_type, cur_result = self.parse_stack.popleft()
+                else:
+                    if cc in (b"'", b'"', b's'):
+                        key = self._parse_string(cc)
+                    else:
+                        self._error("Invalid map key")
+                    cc = self._getc()
+                    while cc != b':':
+                        if not cc.isspace():
+                            self._error("Invalid map key %s" % cc.decode('utf-8'))
+                        cc = self._getc()
+
+                    cc = self._getc()
+                    cur_result[key] = self._dispatch[ord(cc)](cc)
+            elif iter_type == b'[':
+                while cc.isspace() or cc == b',':
+                    cc = self._getc()
+                if cc == b']':
+                    iter_type, cur_result = self.parse_stack.popleft()
+                else:
+                    cur_result.append(self._dispatch[ord(cc)](cc))
+            if (len(self.parse_stack) == 0):
+                return cur_result
+
 
     def _parse_binary(self, cc):
         "parse a single binary object."
@@ -184,36 +218,9 @@ class LLSDNotationParser(LLSDBaseParser):
 
         map: { string:object, string:object }
         """
-        rv = {}
-        key = b''
-        found_key = False
-        # skip the beginning '{'
-        cc = self._getc()
-        while (cc != b'}'):
-            if cc is None:
-                self._error("Unclosed map")
-            if not found_key:
-                if cc in (b"'", b'"', b's'):
-                    key = self._parse_string(cc)
-                    found_key = True
-                elif cc.isspace() or cc == b',':
-                    # ignore space or comma
-                    pass
-                else:
-                    self._error("Invalid map key")
-            elif cc.isspace():
-                # ignore space
-                pass
-            elif cc == b':':
-                # skip the ':'
-                value = self._parse(self._getc())
-                rv[key] = value
-                found_key = False
-            else:
-                self._error("missing separator")
-            cc = self._getc()
-
-        return rv
+        result = {}
+        self.parse_stack.appendleft([b'{', result])
+        return result
 
     def _parse_array(self, cc):
         """
@@ -223,17 +230,9 @@ class LLSDNotationParser(LLSDBaseParser):
         """
         rv = []
         # skip the beginning '['
-        cc = self._getc()
-        while (cc != b']'):
-            if cc is None:
-                self._error('Unclosed array')
-            if cc.isspace() or cc == b',':
-                cc = self._getc()
-                continue
-            rv.append(self._parse(cc))
-            cc = self._getc()
-
-        return rv
+        result = []
+        self.parse_stack.appendleft([b'[', result])
+        return result
 
     def _parse_uuid(self, cc):
         "Parse a uuid."
@@ -416,6 +415,11 @@ class LLSDNotationFormatter(LLSDBaseFormatter):
 
     See http://wiki.secondlife.com/wiki/LLSD#Notation_Serialization
     """
+
+    def __init__(self):
+        super(LLSDNotationFormatter, self).__init__()
+        self.iter_stack = deque([])
+
     def _LLSD(self, v):
         raise LLSDSerializationError("We should never end up here") # pragma: no cover
     def _UNDEF(self, v):
@@ -450,10 +454,10 @@ class LLSDNotationFormatter(LLSDBaseFormatter):
         self.stream.writelines([b'd"', _format_datestr(v), b'"'])
     def _ARRAY(self, v):
         self.stream.write(b'[')
-        self.iter_stack.append([iter(v), b"]", None, b""])
+        self.iter_stack.appendleft([iter(v), b"]", None, b""])
     def _MAP(self, v):
         self.stream.write(b'{')
-        self.iter_stack.append([iter(v), b"}", v, b""])
+        self.iter_stack.appendleft([iter(v), b"}", v, b""])
     def _esc(self, data, quote=b"'"):
         return _str_to_bytes(data).replace(b"\\", b"\\\\").replace(quote, b'\\'+quote)
 
@@ -465,9 +469,9 @@ class LLSDNotationFormatter(LLSDBaseFormatter):
 
         """
 
-        self.iter_stack = [[iter([something]), b"", None, b""]]
+        self.iter_stack.appendleft([iter([something]), b"", None, b""])
         while True:
-            stack_top = self.iter_stack[-1]
+            stack_top = self.iter_stack[0]
             cur_iter, iter_type, iterable_obj, delim = stack_top
             try:
                 item = next(cur_iter)
@@ -491,7 +495,7 @@ class LLSDNotationFormatter(LLSDBaseFormatter):
                 self.type_map[item_type](item)
             except StopIteration:
                 self.stream.write(iter_type)
-                self.iter_stack.pop()
+                self.iter_stack.popleft()
             if len(self.iter_stack) == 1:
                 break
 

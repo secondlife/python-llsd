@@ -1,12 +1,11 @@
 import calendar
 from collections import deque
 import datetime
-import io
 import struct
 import uuid
 
-from llsd.base import (_LLSD, LLSDBaseFormatter, LLSDBaseParser, LLSDSerializationError, BINARY_HEADER,
-                       LLSDSerializationError, UnicodeType, _str_to_bytes, binary, is_integer, is_string, uri)
+from llsd.base import (_LLSD, LLSDBaseFormatter, LLSDBaseParser, BINARY_HEADER,
+                       LLSDSerializationError, _str_to_bytes, binary, is_integer, is_string, uri)
 
 
 try:
@@ -64,6 +63,7 @@ class LLSDBinaryParser(LLSDBaseParser):
         # entries in _dispatch.
         for c, func in _dispatch_dict.items():
             self._dispatch[ord(c)] = func
+        self._keep_binary = False
         self.parse_stack = deque([])
 
     def parse(self, something, ignore_binary = False):
@@ -120,7 +120,7 @@ class LLSDBinaryParser(LLSDBaseParser):
                 else:
                     self.parse_stack[0][0]  = item_count + 1
                     cur_result.append(self._dispatch[ord(cc)]())
-            if (len(self.parse_stack) == 0):
+            if len(self.parse_stack) == 0:
                 return cur_result
 
     def _parse_map(self):
@@ -171,6 +171,11 @@ class LLSDBinaryFormatter(LLSDBaseFormatter):
 
     See http://wiki.secondlife.com/wiki/LLSD#Notation_Serialization
     """
+
+    def __init__(self):
+        super(LLSDBinaryFormatter, self).__init__()
+        self.iter_stack = deque([])
+
     def _LLSD(self, v):
         raise LLSDSerializationError("We should never end up here") # pragma: no cover
     def _UNDEF(self, v):
@@ -186,7 +191,7 @@ class LLSDBinaryFormatter(LLSDBaseFormatter):
         try:
             self.stream.writelines([b'r', struct.pack('!d', v)])
         except SystemError as exc:
-            raise LLSDSerializationError(str(exc), something)
+            raise LLSDSerializationError(str(exc), v)
     def _UUID(self, v):
         self.stream.writelines([b'u', v.bytes])
     def _BINARY(self, v):
@@ -206,10 +211,10 @@ class LLSDBinaryFormatter(LLSDBaseFormatter):
         self.stream.writelines([b'd', struct.pack('<d', seconds_since_epoch)])
     def _ARRAY(self, v):
         self.stream.writelines([b'[', struct.pack('!i', len(v))])
-        self.iter_stack.append([iter(v), b"]", None])
+        self.iter_stack.appendleft([iter(v), b"]", None])
     def _MAP(self, v):
         self.stream.writelines([b'{', struct.pack('!i', len(v))])
-        self.iter_stack.append([iter(v), b"}", v])
+        self.iter_stack.appendleft([iter(v), b"}", v])
 
     def _write(self, something):
         """
@@ -220,9 +225,9 @@ class LLSDBinaryFormatter(LLSDBaseFormatter):
         """
 
         self.stream.write(b'<?llsd/binary?>\n')
-        self.iter_stack = [[iter([something]), b"", None]]
+        self.iter_stack.appendleft([iter([something]), b"", None])
         while True:
-            cur_iter, iter_type, iterable_obj = self.iter_stack[-1]
+            cur_iter, iter_type, iterable_obj = self.iter_stack[0]
             try:
                 item = next(cur_iter)
                 if iterable_obj:
@@ -238,7 +243,7 @@ class LLSDBinaryFormatter(LLSDBaseFormatter):
                 self.type_map[item_type](item)
             except StopIteration:
                 self.stream.write(iter_type)
-                self.iter_stack.pop()
+                self.iter_stack.popleft()
             if len(self.iter_stack) == 1:
                 break
 
@@ -255,6 +260,7 @@ def format_binary(something):
 
 
 def write_binary(stream, something):
+    """ Primary binary writing entrypoint."""
     return LLSDBinaryFormatter().write(stream, something)
 
 
