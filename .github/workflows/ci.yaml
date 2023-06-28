@@ -28,11 +28,11 @@ jobs:
 
       - name: Install python dependencies
         run: |
-          set
-          git tag
+          apt-get update
+          apt-get -y install sudo
           pip install --upgrade pip
-          pip install wheel build tox
-          pip install .[dev]
+          sudo -H pip install wheel build tox
+          sudo -H pip install .[dev]
 
       - name: Determine pyenv
         id: pyenv
