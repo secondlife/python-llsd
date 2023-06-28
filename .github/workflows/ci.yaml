@@ -30,7 +30,7 @@ jobs:
           git config --global --add safe.directory '*'
           echo "DONE MARKING DIRECTORIES AS SAFE"
           ls -la /home
-          echo $USER
+          who
           pip install --upgrade pip
           sudo -H git tag
           sudo -H pip install wheel build tox
