@@ -32,6 +32,7 @@ jobs:
           apt-get -y install sudo
           pip install --upgrade pip
           sudo -H pip install wheel build tox
+          ls -la
           sudo -H pip install .[dev]
 
       - name: Determine pyenv
