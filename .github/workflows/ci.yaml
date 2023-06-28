@@ -26,6 +26,8 @@ jobs:
         run: |
           apt-get update
           apt-get -y install sudo
+          python -m venv /tmp/venv
+          source /tmp/venv/bin/activate
           echo "MARKING DIRECTORIES AS SAFE"
           git config --global --add safe.directory '*'
           echo "DONE MARKING DIRECTORIES AS SAFE"
