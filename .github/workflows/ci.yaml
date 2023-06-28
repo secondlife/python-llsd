@@ -26,9 +26,6 @@ jobs:
         run: |
           apt-get update
           apt-get -y install sudo
-          python -m venv /tmp/venv
-          source /tmp/venv/bin/activate
-          echo "VIRTUAL ENV: $VIRTUAL_ENV"
           ls -la /home
           set
           pip install --upgrade pip
