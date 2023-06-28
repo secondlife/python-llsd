@@ -12,9 +12,10 @@ jobs:
     strategy:
       matrix:
         python-version: ['2.7', '3.7', '3.8', '3.10']
+        container: ["python:2.7", "python:3.7", "python:3.8", "python:3.10"]
     runs-on: [ubuntu-latest]
       container:
-        image: 'python:${{ matrix.python-version }}'
+        image: ${{ matrix.containert }}
     env:
       PYTHON: ${{ matrix.python-version }}
     steps:
