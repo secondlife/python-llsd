@@ -26,14 +26,9 @@ jobs:
         run: |
           apt-get update
           apt-get -y install sudo
-          ls -la
-          set
           pip install --upgrade pip
           sudo chown root .
-          git tag
-          git status
           sudo -H pip install wheel build tox
-          ls -la
           sudo -H pip install .[dev]
 
       - name: Determine pyenv
