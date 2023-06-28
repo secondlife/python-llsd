@@ -20,6 +20,9 @@ setup(
     setup_requires=["setuptools_scm<6"],
     use_scm_version={
         'local_scheme': 'no-local-version', # disable local-version to allow uploads to test.pypi.org
+        'version_scheme': 'post-release',
+        'relative_to': __file__,
+        'root': '..',
     },
     extras_require={
         "dev": ["pytest", "pytest-benchmark", "pytest-cov<3"],
