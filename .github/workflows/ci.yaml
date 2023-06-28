@@ -13,6 +13,7 @@ jobs:
       matrix:
         python-version: ['2.7', '3.7', '3.8', '3.10']
     runs-on: [ubuntu-latest]
+      container: python:${{ matrix.python-version }}
     env:
       PYTHON: ${{ matrix.python-version }}
     steps:
