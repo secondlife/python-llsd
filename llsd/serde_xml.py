@@ -1,13 +1,10 @@
 import base64
-import binascii
-from collections import deque
 import io
 import re
-import uuid
 
 from llsd.base import (_LLSD, ALL_CHARS, LLSDBaseParser, LLSDBaseFormatter, XML_HEADER,
                        LLSDParseError, LLSDSerializationError, UnicodeType,
-                       _format_datestr, _str_to_bytes, is_unicode, PY2, uri, binary, _parse_datestr)
+                       _format_datestr, _str_to_bytes, _to_python, is_unicode, PY2)
 from llsd.fastest_elementtree import ElementTreeError, fromstring, parse as _parse
 
 INVALID_XML_BYTES = b'\x00\x01\x02\x03\x04\x05\x06\x07\x08\x0b\x0c'\
@@ -237,168 +234,6 @@ def write_pretty_xml(stream, something):
     return LLSDXMLPrettyFormatter().write(stream, something)
 
 
-class LLSDXMLParser:
-    def __init__(self):
-        "Construct an xml node parser."
-
-        self.NODE_HANDLERS = {
-            "undef": lambda x: None,
-            "boolean": self._bool_to_python,
-            "integer": self._int_to_python,
-            "real": self._real_to_python,
-            "uuid": self._uuid_to_python,
-            "string": self._str_to_python,
-            "binary": self._bin_to_python,
-            "date": self._date_to_python,
-            "uri": self._uri_to_python,
-            "map": self._map_to_python,
-            "array": self._array_to_python,
-        }
-
-        self.parse_stack = deque([])
-
-    def _bool_to_python(self, node):
-        "Convert boolean node to a python object."
-        val = node.text or ''
-        try:
-            # string value, accept 'true' or 'True' or whatever
-            return (val.lower() in ('true', '1', '1.0'))
-        except AttributeError:
-            # not a string (no lower() method), use normal Python rules
-            return bool(val)
-
-    def _int_to_python(self, node):
-        "Convert integer node to a python object."
-        val = node.text or ''
-        if not val.strip():
-            return 0
-        return int(val)
-
-    def _real_to_python(self, node):
-        "Convert floating point node to a python object."
-        val = node.text or ''
-        if not val.strip():
-            return 0.0
-        return float(val)
-
-    def _uuid_to_python(self, node):
-        "Convert uuid node to a python object."
-        if node.text:
-            return uuid.UUID(hex=node.text)
-        return uuid.UUID(int=0)
-
-    def _str_to_python(self, node):
-        "Convert string node to a python object."
-        return node.text or ''
-
-    def _bin_to_python(self, node):
-        base = node.get('encoding') or 'base64'
-        try:
-            if base == 'base16':
-                # parse base16 encoded data
-                return binary(base64.b16decode(node.text or ''))
-            if base == 'base64':
-                # parse base64 encoded data
-                return binary(base64.b64decode(node.text or ''))
-            raise LLSDParseError("Parser doesn't support %s encoding" % base)
-
-        except binascii.Error as exc:
-            # convert exception class so it's more catchable
-            raise LLSDParseError("Encoded binary data: " + str(exc))
-        except TypeError as exc:
-            # convert exception class so it's more catchable
-            raise LLSDParseError("Bad binary data: " + str(exc))
-
-    def _date_to_python(self, node):
-        "Convert date node to a python object."
-        val = node.text or ''
-        if not val:
-            val = "1970-01-01T00:00:00Z"
-        return _parse_datestr(val)
-
-    def _uri_to_python(self, node):
-        "Convert uri node to a python object."
-        val = node.text or ''
-        return uri(val)
-
-    def _map_to_python(self, node):
-        "Convert map node to a python object."
-        new_result = {}
-        new_stack_entry = [iter(node), node, new_result]
-        self.parse_stack.appendleft(new_stack_entry)
-        return new_result
-
-    def _array_to_python(self, node):
-        "Convert array node to a python object."
-        new_result = []
-        new_stack_entry = [iter(node), node, new_result]
-        self.parse_stack.appendleft(new_stack_entry)
-        return new_result
-
-    def parse_node(self, something):
-        """
-        Parse an ElementTree tree
-        This parser is iterative instead of recursive. It uses
-        Each element in parse_stack is an iterator into either the list
-        or the dict in the tree. This limits depth by size of free memory 
-        instead of size of the function call stack, allowing us to render
-        deeper trees than a recursive model.
-        :param something: The xml node to parse.
-        :returns: Returns a python object.
-        """
-
-        # if the passed in element is not a map or array, simply return
-        # its value.  Otherwise, create a dict or array to receive
-        # child/leaf elements.
-        if something.tag == "map":
-            cur_result = {}
-        elif something.tag == "array":
-            cur_result = []
-        else:
-            if something.tag not in self.NODE_HANDLERS:
-                raise LLSDParseError("Unknown value type %s" % something.tag)
-            return self.NODE_HANDLERS[something.tag](something)
-
-        # start by pushing the current element iterator data onto
-        # the stack
-        # 0 - iterator indicating the current position in the given level of the tree
-        #     this can be either a list iterator position, or an iterator of
-        #     keys for the dict.
-        # 1 - the actual element object.
-        # 2 - the result for this level in the tree, onto which
-        #     children or leafs will be appended/set
-        self.parse_stack.appendleft([iter(something), something, cur_result])
-        while True:
-            node_iter, iterable, cur_result = self.parse_stack[0]
-            try:
-                value = next(node_iter)
-
-            except StopIteration:
-                node_iter, iterable, cur_result = self.parse_stack.popleft()
-                if len(self.parse_stack) == 0:
-                    break
-            else:
-                if iterable.tag == "map":
-                    if value.tag != "key":
-                        raise LLSDParseError("Expected 'key', got %s" % value.tag)
-                    key = value.text
-                    if key is None:
-                        key = ''
-                    try:
-                        value = next(node_iter)
-                    except StopIteration:
-                        raise LLSDParseError("No value for map item %s" % key)
-                    try:
-                        cur_result[key] = self.NODE_HANDLERS[value.tag](value)
-                    except KeyError as err:
-                        raise LLSDParseError("Unknown value type: " + str(err))
-                elif iterable.tag == "array":
-                    try:
-                        cur_result.append(self.NODE_HANDLERS[value.tag](value))
-                    except KeyError as err:
-                        raise LLSDParseError("Unknown value type: " + str(err))
-        return cur_result
-
 def parse_xml(something):
     """
     This is the basic public interface for parsing llsd+xml.
@@ -412,8 +247,6 @@ def parse_xml(something):
     # If we matched the header, then parse whatever follows, else parse the
     # original bytes object or stream.
     return parse_xml_nohdr(parser)
-
-
 
 
 def parse_xml_nohdr(baseparser):
@@ -444,7 +277,7 @@ def parse_xml_nohdr(baseparser):
     if element.tag != 'llsd':
         raise LLSDParseError("Invalid XML Declaration")
     # Extract its contents.
-    return LLSDXMLParser().parse_node(element[0])
+    return _to_python(element[0])
 
 
 def format_xml(something):
