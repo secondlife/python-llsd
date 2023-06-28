@@ -28,6 +28,7 @@ jobs:
 
       - name: Install python dependencies
         run: |
+          set
           git tag
           pip install --upgrade pip
           pip install wheel build tox
