@@ -27,6 +27,7 @@ jobs:
           apt-get update
           apt-get -y install sudo
           pip install --upgrade pip
+          git config --global --add safe.directory .
           sudo git tag
           sudo -H pip install wheel build tox
           ls -la
