@@ -26,7 +26,7 @@ jobs:
         run: |
           apt-get update
           apt-get -y install sudo
-          git config --global --add safe.directory /__w/python-llsd/python-llsd
+          git config --global --add safe.directory '*'
           pip install --upgrade pip
           sudo git tag
           sudo -H pip install wheel build tox
