@@ -26,7 +26,10 @@ jobs:
         run: |
           apt-get update
           apt-get -y install sudo
+          echo "MARKING DIRECTORIES AS SAFE"
           git config --global --add safe.directory '*'
+          echo "DONE MARKING DIRECTORIES AS SAFE"
+          ls -la /home
           pip install --upgrade pip
           sudo git tag
           sudo -H pip install wheel build tox
