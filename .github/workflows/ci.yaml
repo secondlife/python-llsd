@@ -28,8 +28,9 @@ jobs:
 
       - name: Install python dependencies
         run: |
-          sudo -H pip install wheel build tox
-          sudo -H pip install .[dev]
+          pip install --upgrade pip
+          pip install wheel build tox
+          pip install .[dev]
 
       - name: Determine pyenv
         id: pyenv
