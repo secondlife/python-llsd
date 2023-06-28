@@ -61,7 +61,6 @@ def xml_esc(v): # pragma: no cover
     return v.replace(b'&',b'&amp;').replace(b'<',b'&lt;').replace(b'>',b'&gt;')
 
 
-
 class LLSDXMLFormatter(LLSDBaseFormatter):
     """
     Class which implements LLSD XML serialization.
@@ -79,85 +78,117 @@ class LLSDXMLFormatter(LLSDBaseFormatter):
         # Call the super class constructor so that we have the type map
         super(LLSDXMLFormatter, self).__init__()
         self.iter_stack = deque([])
+        self._indent_atom = b''
+        self._eol = b''
+        self._indent_level = 0
+
+    def _indent(self):
+        pass
 
     def _LLSD(self, v):
         raise LLSDSerializationError("We should never end up here") # pragma: no cover
     def _UNDEF(self, _v):
-        self.stream.write(b'<undef/>')
+        self.stream.writelines([b'<undef/>', self._eol])
     def _BOOLEAN(self, v):
         if v:
-            return self.stream.write(b'<boolean>true</boolean>')
-        self.stream.write(b'<boolean>false</boolean>')
+            return self.stream.writelines([b'<boolean>true</boolean>', self._eol])
+        self.stream.writelines([b'<boolean>false</boolean>', self._eol])
     def _INTEGER(self, v):
-        self.stream.writelines([b'<integer>', str(v).encode('utf-8'), b'</integer>'])
+        self.stream.writelines([b'<integer>', str(v).encode('utf-8'), b'</integer>', self._eol])
     def _REAL(self, v):
-        self.stream.writelines([b'<real>', str(v).encode('utf-8'),  b'</real>'])
+        self.stream.writelines([b'<real>', str(v).encode('utf-8'),  b'</real>', self._eol])
     def _UUID(self, v):
         if v.int == 0:
-            return self.stream.write(b'<uuid/>')
-        self.stream.writelines([b'<uuid>', str(v).encode('utf-8'), b'</uuid>'])
+            return self.stream.writelines([b'<uuid/>', self._eol])
+        self.stream.writelines([b'<uuid>', str(v).encode('utf-8'), b'</uuid>', self._eol])
     def _BINARY(self, v):
-        self.stream.writelines([b'<binary>', base64.b64encode(v).strip(), b'</binary>'])
+        self.stream.writelines([b'<binary>', base64.b64encode(v).strip(), b'</binary>', self._eol])
     def _STRING(self, v):
         # We don't simply have a function that encapsulates the PY2 vs PY3 calls,
         # as that results in another function call and is slightly less performant
         if PY2:    # pragma: no cover
-            return self.stream.writelines([b'<string>', _str_to_bytes(xml_esc(v)), b'</string>'])
-        self.stream.writelines([b'<string>', v.translate(XML_ESC_TRANS).encode('utf-8'), b'</string>'])
+            return self.stream.writelines([b'<string>', _str_to_bytes(xml_esc(v)), b'</string>', self._eol])
+        self.stream.writelines([b'<string>', v.translate(XML_ESC_TRANS).encode('utf-8'), b'</string>', self._eol])
     def _URI(self, v):
         # We don't simply have a function that encapsulates the PY2 vs PY3 calls,
         # as that results in another function call and is slightly less performant
         if PY2:    # pragma: no cover
-            return self.stream.writelines([b'<uri>', _str_to_bytes(xml_esc(v)), b'</uri>'])
-        self.stream.writelines([b'<uri>', str(v).translate(XML_ESC_TRANS).encode('utf-8'), b'</uri>'])
+            return self.stream.writelines([b'<uri>', _str_to_bytes(xml_esc(v)), b'</uri>', self._eol])
+        self.stream.writelines([b'<uri>', str(v).translate(XML_ESC_TRANS).encode('utf-8'), b'</uri>', self._eol])
     def _DATE(self, v):
-        self.stream.writelines([b'<date>', _format_datestr(v), b'</date>'])
+        self.stream.writelines([b'<date>', _format_datestr(v), b'</date>', self._eol])
     def _ARRAY(self, v):
-        self.stream.write(b'<array>')
+        self.stream.writelines([b'<array>', self._eol])
         self.iter_stack.appendleft((iter(v), b"array", None))
+        self._indent_level = self._indent_level + 1
     def _MAP(self, v):
-        self.stream.write(b'<map>')
+        self.stream.writelines([b'<map>', self._eol])
         self.iter_stack.appendleft((iter(v), b"map", v))
+        self._indent_level = self._indent_level + 1
 
     def _write(self, something):
         """
         Serialize a python object to self.stream as application/llsd+xml.
+        This serializer is iterative instead of recursive. Each element in 
+        iter_stack is an iterator into either the list or the dict in the tree.
+        This limits depth by size of free memory instead of size of the function
+        call stack, allowing us to render deeper trees than a recursive model.
 
         :param something: A python object (typically a dict) to be serialized.
         """
-        self.stream.write(b'<?xml version="1.0" ?>'
-                          b'<llsd>')
+        self.stream.writelines([b'<?xml version="1.0" ?>', self._eol,
+                                b'<llsd>', self._eol])
 
+        # start by pushing the passed-in element onto the stack
+        # as an element of a tuple.  The array acts as the
+        # root node.
+        # each element of the iter_stack is:
+        # 0 - iterator indicating the current position in the given level of the tree
+        #     this can be either a list iterator position, or an iterator of
+        #     keys for the dict.
+        # 1 - the type string for the element.  Used to close out the xml element.
+        # 2 - the actual element object.
         self.iter_stack.appendleft((iter([something]), b"", None))
         while True:
             cur_iter, iter_type, iterable_obj = self.iter_stack[0]
             try:
                 item = next(cur_iter)
+            except StopIteration:
+                self._indent_level -= 1
+                self._indent()
+                self.stream.writelines([b'</', iter_type, b'>', self._eol])
+                self.iter_stack.popleft()
+            else:
                 if iter_type == b"map":
-
+                    self._indent()
                     # We don't simply have a function that encapsulates the PY2 vs PY3 calls,
                     # as that results in another function call and is slightly less performant
                     if PY2: # pragma: no cover
                         self.stream.writelines([b'<key>',
                                                 _str_to_bytes(xml_esc(UnicodeType(item))),
-                                                b'</key>'])
+                                                b'</key>', self._eol])
                     else:
                         # fair performance improvement by explicitly doing the
                         # translate for py3 instead of calling xml_esc
                         self.stream.writelines([b'<key>',
                                                 str(item).translate(XML_ESC_TRANS).encode('utf-8'),
-                                                b'</key>'])
+                                                b'</key>', self._eol])
+                    # grab the item from the dict
                     item = iterable_obj[item] # pylint: disable=unsubscriptable-object
+
+                # LLSD nodes point to an item, and we want to
+                # render the LLSD XML for the item itself.
                 while isinstance(item, _LLSD):
                     item = item.thing
+
                 item_type = type(item)
-                if not item_type in self.type_map:
+                try:
+                    tfunction = self.type_map[item_type]
+                except KeyError:
                     raise LLSDSerializationError(
                         "Cannot serialize unknown type: %s (%s)" % (item_type, item))
-                self.type_map[item_type](item)
-            except StopIteration:
-                self.stream.writelines([b'</', iter_type, b'>'])
-                self.iter_stack.popleft()
+                self._indent()
+                tfunction(item)
             if len(self.iter_stack) == 1:
                 break
         self.stream.write(b'</llsd>')
@@ -187,73 +218,11 @@ class LLSDXMLPrettyFormatter(LLSDXMLFormatter):
             self._indent_atom = b'  '
         else:
             self._indent_atom = indent_atom
-        self.iter_stack = None
-
-    def _ARRAY(self, v):
-        self.stream.write(b'<array>')
-        self._indent_level += 1
-        self.iter_stack.append((iter(v), b"array", None))
-
-    def _MAP(self, v):
-        self.stream.write(b'<map>')
-        self._indent_level += 1
-        self.iter_stack.append((iter(v), b"map", v))
+        self._eol = b'\n'
 
     def _indent(self):
         "Write an indentation based on the atom and indentation level."
         self.stream.writelines([self._indent_atom] * self._indent_level)
-
-    def _write(self, something):
-        """
-        Serialize a python object to self.stream as application/llsd+xml.
-
-        :param something: A python object (typically a dict) to be serialized.
-
-        NOTE: This is nearly identical to the above _write with the exception
-        that this one includes newlines and indentation.  Doing something clever
-        for the above may decrease performance for the common case, so it's been
-        split out.  We can probably revisit this, though.
-        """
-        self.stream.write(b'<?xml version="1.0" ?>\n'
-                          b'<llsd>\n')
-
-        self.iter_stack = [(iter([something]), b"", None)]
-        while True:
-            cur_iter, iter_type, iterable_obj = self.iter_stack[-1]
-            try:
-                item = next(cur_iter)
-                if iter_type == b"map":
-                    self._indent()
-                    # We don't simply have a function that encapsulates the PY2 vs PY3 calls,
-                    # as that results in another function call and is slightly less performant
-                    if PY2:  # pragma: no cover
-                        self.stream.write(b'<key>' +
-                                          _str_to_bytes(xml_esc(UnicodeType(item))) +
-                                          b'</key>')
-                    else:
-                        # calling translate directly is a bit faster
-                        self.stream.write(b'<key>' +
-                        str(item).translate(XML_ESC_TRANS).encode('utf-8') +
-                                          b'</key>\n')
-                    item = iterable_obj[item] # pylint: disable=unsubscriptable-object
-                if isinstance(item, _LLSD):
-                    item = item.thing
-                item_type = type(item)
-                if not item_type in self.type_map:
-                    raise LLSDSerializationError(
-                        "Cannot serialize unknown type: %s (%s)" % (item_type, item))
-
-                self._indent()
-                self.type_map[item_type](item)
-                self.stream.write(b'\n')
-            except StopIteration:
-                self._indent_level -= 1
-                self._indent()
-                self.stream.write(b'</' + iter_type + b'>\n')
-                self.iter_stack.pop()
-            if len(self.iter_stack) == 1:
-                break
-        self.stream.write(b'</llsd>\n')
 
 
 def format_pretty_xml(something):
@@ -395,10 +364,19 @@ class LLSDXMLParser:
 
     def parse_node(self, something):
         """
-        Parse an xml node tree via iteration.
+        Parse an ElementTree tree
+        This parser is iterative instead of recursive. It uses
+        Each element in parse_stack is an iterator into either the list
+        or the dict in the tree. This limits depth by size of free memory 
+        instead of size of the function call stack, allowing us to render
+        deeper trees than a recursive model.
         :param something: The xml node to parse.
         :returns: Returns a python object.
         """
+
+        # if the passed in element is not a map or array, simply return
+        # its value.  Otherwise, create a dict or array to receive
+        # child/leaf elements.
         if something.tag == "map":
             cur_result = {}
         elif something.tag == "array":
@@ -408,27 +386,44 @@ class LLSDXMLParser:
                 raise LLSDParseError("Unknown value type %s" % something.tag)
             return self.NODE_HANDLERS[something.tag](something)
 
+        # start by pushing the current element iterator data onto
+        # the stack
+        # 0 - iterator indicating the current position in the given level of the tree
+        #     this can be either a list iterator position, or an iterator of
+        #     keys for the dict.
+        # 1 - the actual element object.
+        # 2 - the result for this level in the tree, onto which
+        #     children or leafs will be appended/set
         self.parse_stack.appendleft([iter(something), something, cur_result])
         while True:
             node_iter, iterable, cur_result = self.parse_stack[0]
             try:
                 value = next(node_iter)
+            
+            except StopIteration:
+                node_iter, iterable, cur_result = self.parse_stack.popleft()
+                if len(self.parse_stack) == 0:
+                    break
+            else:
                 if iterable.tag == "map":
                     if value.tag != "key":
                         raise LLSDParseError("Expected 'key', got %s" % value.tag)
                     key = value.text
                     if key is None:
                         key = ''
-                    value = next(node_iter)
-                    cur_result[key] = self.NODE_HANDLERS[value.tag](value)
+                    try:
+                        value = next(node_iter)
+                    except StopIteration:
+                        raise LLSDParseError("No value for map item %s" % key)
+                    try:
+                        cur_result[key] = self.NODE_HANDLERS[value.tag](value)
+                    except KeyError as err:
+                        raise LLSDParseError("Unknown value type: " + str(err))
                 elif iterable.tag == "array":
-                    cur_result.append(self.NODE_HANDLERS[value.tag](value))
-            except KeyError as err:
-                raise LLSDParseError("Unknown value type: " + str(err))
-            except StopIteration:
-                node_iter, iterable, cur_result = self.parse_stack.popleft()
-                if len(self.parse_stack) == 0:
-                    break
+                    try:
+                        cur_result.append(self.NODE_HANDLERS[value.tag](value))
+                    except KeyError as err:
+                        raise LLSDParseError("Unknown value type: " + str(err))
         return cur_result
 
 def parse_xml(something):
