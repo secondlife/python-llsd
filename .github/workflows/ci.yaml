@@ -26,13 +26,11 @@ jobs:
         run: |
           apt-get update
           apt-get -y install sudo
-          sudo python -m venv /tmp/venv
-          sudo source /tmp/venv/bin/activate
-          echo "MARKING DIRECTORIES AS SAFE"
-          git config --global --add safe.directory '*'
-          echo "DONE MARKING DIRECTORIES AS SAFE"
+          python -m venv /tmp/venv
+          source /tmp/venv/bin/activate
+          echo "VIRTUAL ENV: $VIRTUAL_ENV"
           ls -la /home
-          who
+          set
           pip install --upgrade pip
           sudo -H git tag
           sudo -H pip install wheel build tox
