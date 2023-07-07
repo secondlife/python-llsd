@@ -4,7 +4,7 @@ import re
 import uuid
 
 from llsd.base import (_LLSD, B, LLSDBaseFormatter, LLSDBaseParser, NOTATION_HEADER,
-                       MAX_FORMAT_DEPTH, LLSDParseError, LLSDSerializationError, UnicodeType,
+                       MAX_FORMAT_DEPTH, MAX_PARSE_DEPTH, LLSDParseError, LLSDSerializationError, UnicodeType,
                        _format_datestr, _parse_datestr, _str_to_bytes, binary, uri)
 
 
@@ -70,6 +70,7 @@ class LLSDNotationParser(LLSDBaseParser):
         # Then fill in specific entries based on the dict above.
         for c, func in _dispatch_dict.items():
             self._dispatch[ord(c)] = func
+        self._depth = 0
 
     def parse(self, something, ignore_binary = False):
         """
@@ -107,6 +108,8 @@ class LLSDNotationParser(LLSDBaseParser):
 
     def _parse(self, cc):
         "The notation parser workhorse."
+        if self._depth > MAX_PARSE_DEPTH:
+            self._error("Parse depth exceeded max.")
         try:
             func = self._dispatch[ord(cc)]
         except IndexError:
@@ -182,6 +185,7 @@ class LLSDNotationParser(LLSDBaseParser):
         rv = {}
         key = b''
         found_key = False
+        self._depth = self._depth + 1
         # skip the beginning '{'
         cc = self._getc()
         while (cc != b'}'):
@@ -207,6 +211,7 @@ class LLSDNotationParser(LLSDBaseParser):
             else:
                 self._error("missing separator")
             cc = self._getc()
+        self._depth = self._depth - 1
 
         return rv
 
@@ -217,6 +222,7 @@ class LLSDNotationParser(LLSDBaseParser):
         array: [ object, object, object ]
         """
         rv = []
+        self._depth = self._depth + 1
         # skip the beginning '['
         cc = self._getc()
         while (cc != b']'):
@@ -227,7 +233,7 @@ class LLSDNotationParser(LLSDBaseParser):
                 continue
             rv.append(self._parse(cc))
             cc = self._getc()
-
+        self._depth = self._depth - 1
         return rv
 
     def _parse_uuid(self, cc):

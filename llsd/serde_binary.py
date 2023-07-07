@@ -5,7 +5,7 @@ import struct
 import uuid
 
 from llsd.base import (_LLSD, LLSDBaseParser, LLSDSerializationError, BINARY_HEADER,
-                       MAX_FORMAT_DEPTH,_str_to_bytes, binary, is_integer, is_string, uri)
+                       MAX_FORMAT_DEPTH, MAX_PARSE_DEPTH, _str_to_bytes, binary, is_integer, is_string, uri)
 
 
 try:
@@ -21,7 +21,7 @@ class LLSDBinaryParser(LLSDBaseParser):
 
     See http://wiki.secondlife.com/wiki/LLSD#Binary_Serialization
     """
-    __slots__ = ['_dispatch', '_keep_binary']
+    __slots__ = ['_dispatch', '_keep_binary', '_depth']
 
     def __init__(self):
         super(LLSDBinaryParser, self).__init__()
@@ -62,6 +62,7 @@ class LLSDBinaryParser(LLSDBaseParser):
         # entries in _dispatch.
         for c, func in _dispatch_dict.items():
             self._dispatch[ord(c)] = func
+        self._depth = 0
 
     def parse(self, something, ignore_binary = False):
         """
@@ -81,6 +82,9 @@ class LLSDBinaryParser(LLSDBaseParser):
 
     def _parse(self):
         "The actual parser which is called recursively when necessary."
+        if self._depth > MAX_PARSE_DEPTH:
+            self._error("Parse depth exceeded max.")
+
         cc = self._getc()
         try:
             func = self._dispatch[ord(cc)]
@@ -96,6 +100,7 @@ class LLSDBinaryParser(LLSDBaseParser):
         count = 0
         cc = self._getc()
         key = b''
+        self._depth = self._depth + 1
         while (cc != b'}') and (count < size):
             if cc == b'k':
                 key = self._parse_string()
@@ -109,16 +114,19 @@ class LLSDBinaryParser(LLSDBaseParser):
             cc = self._getc()
         if cc != b'}':
             self._error("invalid map close token")
+        self._depth = self._depth - 1
         return rv
 
     def _parse_array(self):
         "Parse a single llsd array"
         rv = []
+        self._depth = self._depth + 1
         size = struct.unpack("!i", self._getc(4))[0]
         for count in range(size):
             rv.append(self._parse())
         if self._getc() != b']':
             self._error("invalid array close token")
+        self._depth = self._depth - 1
         return rv
 
     def _parse_string(self):

@@ -32,6 +32,8 @@ NOTATION_HEADER = b'<? llsd/notation ?>'
 ALL_CHARS = str(bytearray(range(256))) if PY2 else bytes(range(256))
 
 MAX_FORMAT_DEPTH = 200
+MAX_PARSE_DEPTH = 200
+
 class _LLSD:
     __metaclass__ = abc.ABCMeta
 
@@ -209,7 +211,7 @@ def _parse_datestr(datestr):
     return datetime.datetime(year, month, day, hour, minute, second, usec)
 
 
-def _bool_to_python(node):
+def _bool_to_python(node, depth=0):
     "Convert boolean node to a python object."
     val = node.text or ''
     try:
@@ -220,7 +222,7 @@ def _bool_to_python(node):
        return bool(val)
 
 
-def _int_to_python(node):
+def _int_to_python(node, depth=0):
     "Convert integer node to a python object."
     val = node.text or ''
     if not val.strip():
@@ -228,7 +230,7 @@ def _int_to_python(node):
     return int(val)
 
 
-def _real_to_python(node):
+def _real_to_python(node, depth=0):
     "Convert floating point node to a python object."
     val = node.text or ''
     if not val.strip():
@@ -236,19 +238,19 @@ def _real_to_python(node):
     return float(val)
 
 
-def _uuid_to_python(node):
+def _uuid_to_python(node, depth=0):
     "Convert uuid node to a python object."
     if node.text:
         return uuid.UUID(hex=node.text)
     return uuid.UUID(int=0)
 
 
-def _str_to_python(node):
+def _str_to_python(node, depth=0):
     "Convert string node to a python object."
     return node.text or ''
 
 
-def _bin_to_python(node):
+def _bin_to_python(node, depth=0):
     base = node.get('encoding') or 'base64'
     try:
         if base == 'base16':
@@ -267,7 +269,7 @@ def _bin_to_python(node):
         return LLSDParseError("Bad binary data: " + str(exc))
 
 
-def _date_to_python(node):
+def _date_to_python(node, depth=0):
     "Convert date node to a python object."
     val = node.text or ''
     if not val:
@@ -275,30 +277,30 @@ def _date_to_python(node):
     return _parse_datestr(val)
 
 
-def _uri_to_python(node):
+def _uri_to_python(node, depth=0):
     "Convert uri node to a python object."
     val = node.text or ''
     return uri(val)
 
 
-def _map_to_python(node):
+def _map_to_python(node, depth=0):
     "Convert map node to a python object."
     result = {}
     for index in range(len(node))[::2]:
         if node[index].text is None:
-            result[''] = _to_python(node[index+1])
+            result[''] = _to_python(node[index+1], depth+1)
         else:
-            result[node[index].text] = _to_python(node[index+1])
+            result[node[index].text] = _to_python(node[index+1], depth+1)
     return result
 
 
-def _array_to_python(node):
+def _array_to_python(node, depth=0):
     "Convert array node to a python object."
-    return [_to_python(child) for child in node]
+    return [_to_python(child, depth+1) for child in node]
 
 
 NODE_HANDLERS = dict(
-    undef=lambda x: None,
+    undef=lambda x,y: None,
     boolean=_bool_to_python,
     integer=_int_to_python,
     real=_real_to_python,
@@ -312,9 +314,12 @@ NODE_HANDLERS = dict(
 )
 
 
-def _to_python(node):
+def _to_python(node, depth=0):
     "Convert node to a python object."
-    return NODE_HANDLERS[node.tag](node)
+    if depth > MAX_PARSE_DEPTH:
+        raise LLSDParseError("Cannot serialize depth of more than %d" % MAX_FORMAT_DEPTH)
+
+    return NODE_HANDLERS[node.tag](node, depth)
 
 
 class LLSDBaseFormatter(object):
