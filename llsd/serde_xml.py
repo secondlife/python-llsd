@@ -3,7 +3,7 @@ import io
 import re
 
 from llsd.base import (_LLSD, ALL_CHARS, LLSDBaseParser, LLSDBaseFormatter, XML_HEADER,
-                       LLSDParseError, LLSDSerializationError, UnicodeType,
+                       MAX_FORMAT_DEPTH, LLSDParseError, LLSDSerializationError, UnicodeType,
                        _format_datestr, _str_to_bytes, _to_python, is_unicode, PY2)
 from llsd.fastest_elementtree import ElementTreeError, fromstring, parse as _parse
 
@@ -23,7 +23,6 @@ if not PY2:
 
     for x in INVALID_XML_BYTES:
         XML_ESC_TRANS[x] = None
-
 
 def remove_invalid_xml_bytes(b):
     """
@@ -76,7 +75,7 @@ class LLSDXMLFormatter(LLSDBaseFormatter):
         super(LLSDXMLFormatter, self).__init__()
         self._indent_atom = b''
         self._eol = b''
-        self._indent_level = 0
+        self._depth = 1
 
     def _indent(self):
         pass
@@ -115,15 +114,15 @@ class LLSDXMLFormatter(LLSDBaseFormatter):
         self.stream.writelines([b'<date>', _format_datestr(v), b'</date>', self._eol])
     def _ARRAY(self, v):
         self.stream.writelines([b'<array>', self._eol])
-        self._indent_level = self._indent_level + 1
+        self._depth = self._depth + 1
         for item in v:
             self._indent()
             self._generate(item)
-        self._indent_level = self._indent_level - 1
+        self._depth = self._depth - 1
         self.stream.writelines([b'</array>', self._eol])
     def _MAP(self, v):
         self.stream.writelines([b'<map>', self._eol])
-        self._indent_level = self._indent_level + 1
+        self._depth = self._depth + 1
         for key, value in v.items():
             self._indent()
             if PY2:     # pragma: no cover
@@ -138,12 +137,14 @@ class LLSDXMLFormatter(LLSDBaseFormatter):
                                         self._eol])
             self._indent()
             self._generate(value)
-        self._indent_level = self._indent_level - 1
+        self._depth = self._depth - 1
         self._indent()
         self.stream.writelines([b'</map>', self._eol])
 
     def _generate(self, something):
         "Generate xml from a single python object."
+        if self._depth - 1 > MAX_FORMAT_DEPTH:
+            raise LLSDSerializationError("Cannot serialize depth of more than %d" % MAX_FORMAT_DEPTH)
         t = type(something)
         if t in self.type_map:
             return self.type_map[t](something)
@@ -183,13 +184,12 @@ class LLSDXMLPrettyFormatter(LLSDXMLFormatter):
         super(LLSDXMLPrettyFormatter, self).__init__()
 
         # Private data used for indentation.
-        self._indent_level = 1
         self._indent_atom = indent_atom
         self._eol = b'\n'
 
     def _indent(self):
         "Write an indentation based on the atom and indentation level."
-        self.stream.writelines([self._indent_atom] * self._indent_level)
+        self.stream.writelines([self._indent_atom] * self._depth)
 
 
 def format_pretty_xml(something):

@@ -31,7 +31,7 @@ NOTATION_HEADER = b'<? llsd/notation ?>'
 
 ALL_CHARS = str(bytearray(range(256))) if PY2 else bytes(range(256))
 
-
+MAX_FORMAT_DEPTH = 200
 class _LLSD:
     __metaclass__ = abc.ABCMeta
 

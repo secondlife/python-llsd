@@ -4,7 +4,7 @@ import re
 import uuid
 
 from llsd.base import (_LLSD, B, LLSDBaseFormatter, LLSDBaseParser, NOTATION_HEADER,
-                       LLSDParseError, LLSDSerializationError, UnicodeType,
+                       MAX_FORMAT_DEPTH, LLSDParseError, LLSDSerializationError, UnicodeType,
                        _format_datestr, _parse_datestr, _str_to_bytes, binary, uri)
 
 
@@ -411,6 +411,11 @@ class LLSDNotationFormatter(LLSDBaseFormatter):
 
     See http://wiki.secondlife.com/wiki/LLSD#Notation_Serialization
     """
+
+    def __init__(self):
+        super(LLSDNotationFormatter, self).__init__()
+        self._depth = 0
+
     def _LLSD(self, v):
         return self._generate(v.thing)
     def _UNDEF(self, v):
@@ -443,18 +448,22 @@ class LLSDNotationFormatter(LLSDBaseFormatter):
     def _ARRAY(self, v):
         self.stream.write(b'[')
         delim = b''
+        self._depth = self._depth + 1
         for item in v:
             self.stream.write(delim)
             self._generate(item)
             delim = b','
+        self._depth = self._depth - 1
         self.stream.write(b']')
     def _MAP(self, v):
         self.stream.write(b'{')
         delim = b''
+        self._depth = self._depth + 1
         for key, value in v.items():
             self.stream.writelines([delim, b"'", self._esc(UnicodeType(key)), b"':"])
             self._generate(value)
             delim = b','
+        self._depth = self._depth - 1
         self.stream.write(b'}')
 
     def _esc(self, data, quote=b"'"):
@@ -466,6 +475,9 @@ class LLSDNotationFormatter(LLSDBaseFormatter):
 
         :param something: a python object (typically a dict) to be serialized.
         """
+        if self._depth > MAX_FORMAT_DEPTH:
+            raise LLSDSerializationError("Cannot serialize depth of more than %d" % MAX_FORMAT_DEPTH)
+
         t = type(something)
         handler = self.type_map.get(t)
         if handler:

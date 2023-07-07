@@ -84,7 +84,7 @@ def binary_stream():
 def build_deep_xml():
     deep_data = {}
     curr_data = deep_data
-    for i in range(250):
+    for i in range(198):
         curr_data["curr_data"] = {}
         curr_data["integer"] = 7
         curr_data["string"] = "string"
