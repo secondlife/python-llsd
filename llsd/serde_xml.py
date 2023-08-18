@@ -69,12 +69,12 @@ class LLSDXMLFormatter(LLSDBaseFormatter):
     interface to this functionality.
     """
 
-    def __init__(self, indent_atom = None):
+    def __init__(self, indent_atom = b'', eol = b''):
         "Construct a serializer."
         # Call the super class constructor so that we have the type map
         super(LLSDXMLFormatter, self).__init__()
-        self._indent_atom = b''
-        self._eol = b''
+        self._indent_atom = indent_atom
+        self._eol = eol
         self._depth = 1
 
     def _indent(self):
@@ -178,14 +178,10 @@ class LLSDXMLPrettyFormatter(LLSDXMLFormatter):
     This class is not necessarily suited for serializing very large objects.
     It sorts on dict (llsd map) keys alphabetically to ease human reading.
     """
-    def __init__(self, indent_atom = b'  '):
+    def __init__(self, indent_atom = b'  ', eol = b'\n'):
         "Construct a pretty serializer."
         # Call the super class constructor so that we have the type map
-        super(LLSDXMLPrettyFormatter, self).__init__()
-
-        # Private data used for indentation.
-        self._indent_atom = indent_atom
-        self._eol = b'\n'
+        super(LLSDXMLPrettyFormatter, self).__init__(indent_atom = indent_atom, eol = eol)
 
     def _indent(self):
         "Write an indentation based on the atom and indentation level."

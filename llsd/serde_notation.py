@@ -109,7 +109,7 @@ class LLSDNotationParser(LLSDBaseParser):
     def _parse(self, cc):
         "The notation parser workhorse."
         if self._depth > MAX_PARSE_DEPTH:
-            self._error("Parse depth exceeded max.")
+            self._error("Parse depth exceeded max of %d" % MAX_PARSE_DEPTH)
         try:
             func = self._dispatch[ord(cc)]
         except IndexError:

@@ -83,7 +83,7 @@ class LLSDBinaryParser(LLSDBaseParser):
     def _parse(self):
         "The actual parser which is called recursively when necessary."
         if self._depth > MAX_PARSE_DEPTH:
-            self._error("Parse depth exceeded max.")
+            self._error("Parse depth exceeded maximum depth of %d." % MAX_PARSE_DEPTH)
 
         cc = self._getc()
         try:
@@ -100,7 +100,7 @@ class LLSDBinaryParser(LLSDBaseParser):
         count = 0
         cc = self._getc()
         key = b''
-        self._depth = self._depth + 1
+        self._depth += 1
         while (cc != b'}') and (count < size):
             if cc == b'k':
                 key = self._parse_string()
@@ -114,7 +114,7 @@ class LLSDBinaryParser(LLSDBaseParser):
             cc = self._getc()
         if cc != b'}':
             self._error("invalid map close token")
-        self._depth = self._depth - 1
+        self._depth -= 1
         return rv
 
     def _parse_array(self):

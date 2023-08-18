@@ -16,7 +16,7 @@ import uuid
 import pytest
 
 import llsd
-from llsd.base import PY2, is_integer, is_string, is_unicode
+from llsd.base import PY2, is_integer, is_string, is_unicode, MAX_FORMAT_DEPTH, MAX_PARSE_DEPTH
 from llsd.serde_xml import remove_invalid_xml_bytes
 from tests.fuzz import LLSDFuzzer
 
@@ -533,7 +533,7 @@ class LLSDNotationUnitTest(unittest.TestCase):
         """
 
         test_map = {"foo":"bar", "depth":0}
-        max_depth = 199
+        max_depth = MAX_FORMAT_DEPTH - 1
         for depth in range(max_depth):
             test_map = {"foo":"bar", "depth":depth, "next":test_map}
 
@@ -990,7 +990,7 @@ class LLSDBinaryUnitTest(unittest.TestCase):
         """
 
         test_map = {"foo":"bar", "depth":0}
-        max_depth = 199
+        max_depth = MAX_FORMAT_DEPTH -1
         for depth in range(max_depth):
             test_map = {"foo":"bar", "depth":depth, "next":test_map}
 
@@ -1525,7 +1525,7 @@ class LLSDPythonXMLUnitTest(unittest.TestCase):
         """
 
         test_map = {"foo":"bar", "depth":0}
-        max_depth = 199
+        max_depth = MAX_FORMAT_DEPTH - 1
         for depth in range(max_depth):
             test_map = {"foo":"bar", "depth":depth, "next":test_map}
 
