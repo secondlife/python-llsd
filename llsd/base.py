@@ -317,7 +317,7 @@ NODE_HANDLERS = dict(
 def _to_python(node, depth=0):
     "Convert node to a python object."
     if depth > MAX_PARSE_DEPTH:
-        raise LLSDSerializationError("Cannot serialize depth of more than %d" % MAX_FORMAT_DEPTH)
+        raise LLSDParseError("Cannot parse depth of more than %d" % MAX_FORMAT_DEPTH)
 
     return NODE_HANDLERS[node.tag](node, depth)
 

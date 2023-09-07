@@ -114,15 +114,15 @@ class LLSDXMLFormatter(LLSDBaseFormatter):
         self.stream.writelines([b'<date>', _format_datestr(v), b'</date>', self._eol])
     def _ARRAY(self, v):
         self.stream.writelines([b'<array>', self._eol])
-        self._depth = self._depth + 1
+        self._depth += 1
         for item in v:
             self._indent()
             self._generate(item)
-        self._depth = self._depth - 1
+        self._depth -= 1
         self.stream.writelines([b'</array>', self._eol])
     def _MAP(self, v):
         self.stream.writelines([b'<map>', self._eol])
-        self._depth = self._depth + 1
+        self._depth += 1
         for key, value in v.items():
             self._indent()
             if PY2:     # pragma: no cover
@@ -137,7 +137,7 @@ class LLSDXMLFormatter(LLSDBaseFormatter):
                                         self._eol])
             self._indent()
             self._generate(value)
-        self._depth = self._depth - 1
+        self._depth -= 1
         self._indent()
         self.stream.writelines([b'</map>', self._eol])
 

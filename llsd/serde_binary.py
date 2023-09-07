@@ -120,13 +120,13 @@ class LLSDBinaryParser(LLSDBaseParser):
     def _parse_array(self):
         "Parse a single llsd array"
         rv = []
-        self._depth = self._depth + 1
+        self._depth += 1
         size = struct.unpack("!i", self._getc(4))[0]
         for count in range(size):
             rv.append(self._parse())
         if self._getc() != b']':
             self._error("invalid array close token")
-        self._depth = self._depth - 1
+        self._depth -= 1
         return rv
 
     def _parse_string(self):

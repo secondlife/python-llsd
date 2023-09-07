@@ -185,7 +185,7 @@ class LLSDNotationParser(LLSDBaseParser):
         rv = {}
         key = b''
         found_key = False
-        self._depth = self._depth + 1
+        self._depth += 1
         # skip the beginning '{'
         cc = self._getc()
         while (cc != b'}'):
@@ -211,7 +211,7 @@ class LLSDNotationParser(LLSDBaseParser):
             else:
                 self._error("missing separator")
             cc = self._getc()
-        self._depth = self._depth - 1
+        self._depth -= 1
 
         return rv
 
@@ -222,7 +222,7 @@ class LLSDNotationParser(LLSDBaseParser):
         array: [ object, object, object ]
         """
         rv = []
-        self._depth = self._depth + 1
+        self._depth += 1
         # skip the beginning '['
         cc = self._getc()
         while (cc != b']'):
@@ -233,7 +233,7 @@ class LLSDNotationParser(LLSDBaseParser):
                 continue
             rv.append(self._parse(cc))
             cc = self._getc()
-        self._depth = self._depth - 1
+        self._depth -= 1
         return rv
 
     def _parse_uuid(self, cc):
@@ -454,22 +454,22 @@ class LLSDNotationFormatter(LLSDBaseFormatter):
     def _ARRAY(self, v):
         self.stream.write(b'[')
         delim = b''
-        self._depth = self._depth + 1
+        self._depth += 1
         for item in v:
             self.stream.write(delim)
             self._generate(item)
             delim = b','
-        self._depth = self._depth - 1
+        self._depth -= 1
         self.stream.write(b']')
     def _MAP(self, v):
         self.stream.write(b'{')
         delim = b''
-        self._depth = self._depth + 1
+        self._depth += 1
         for key, value in v.items():
             self.stream.writelines([delim, b"'", self._esc(UnicodeType(key)), b"':"])
             self._generate(value)
             delim = b','
-        self._depth = self._depth - 1
+        self._depth -= 1
         self.stream.write(b'}')
 
     def _esc(self, data, quote=b"'"):
