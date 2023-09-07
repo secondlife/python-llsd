@@ -4,7 +4,7 @@ import re
 import uuid
 
 from llsd.base import (_LLSD, B, LLSDBaseFormatter, LLSDBaseParser, NOTATION_HEADER,
-                       LLSDParseError, LLSDSerializationError, UnicodeType,
+                       MAX_FORMAT_DEPTH, MAX_PARSE_DEPTH, LLSDParseError, LLSDSerializationError, UnicodeType,
                        _format_datestr, _parse_datestr, _str_to_bytes, binary, uri)
 
 
@@ -70,6 +70,7 @@ class LLSDNotationParser(LLSDBaseParser):
         # Then fill in specific entries based on the dict above.
         for c, func in _dispatch_dict.items():
             self._dispatch[ord(c)] = func
+        self._depth = 0
 
     def parse(self, something, ignore_binary = False):
         """
@@ -107,6 +108,8 @@ class LLSDNotationParser(LLSDBaseParser):
 
     def _parse(self, cc):
         "The notation parser workhorse."
+        if self._depth > MAX_PARSE_DEPTH:
+            self._error("Parse depth exceeded max of %d" % MAX_PARSE_DEPTH)
         try:
             func = self._dispatch[ord(cc)]
         except IndexError:
@@ -182,6 +185,7 @@ class LLSDNotationParser(LLSDBaseParser):
         rv = {}
         key = b''
         found_key = False
+        self._depth += 1
         # skip the beginning '{'
         cc = self._getc()
         while (cc != b'}'):
@@ -207,6 +211,7 @@ class LLSDNotationParser(LLSDBaseParser):
             else:
                 self._error("missing separator")
             cc = self._getc()
+        self._depth -= 1
 
         return rv
 
@@ -217,6 +222,7 @@ class LLSDNotationParser(LLSDBaseParser):
         array: [ object, object, object ]
         """
         rv = []
+        self._depth += 1
         # skip the beginning '['
         cc = self._getc()
         while (cc != b']'):
@@ -227,7 +233,7 @@ class LLSDNotationParser(LLSDBaseParser):
                 continue
             rv.append(self._parse(cc))
             cc = self._getc()
-
+        self._depth -= 1
         return rv
 
     def _parse_uuid(self, cc):
@@ -411,6 +417,11 @@ class LLSDNotationFormatter(LLSDBaseFormatter):
 
     See http://wiki.secondlife.com/wiki/LLSD#Notation_Serialization
     """
+
+    def __init__(self):
+        super(LLSDNotationFormatter, self).__init__()
+        self._depth = 0
+
     def _LLSD(self, v):
         return self._generate(v.thing)
     def _UNDEF(self, v):
@@ -443,18 +454,22 @@ class LLSDNotationFormatter(LLSDBaseFormatter):
     def _ARRAY(self, v):
         self.stream.write(b'[')
         delim = b''
+        self._depth += 1
         for item in v:
             self.stream.write(delim)
             self._generate(item)
             delim = b','
+        self._depth -= 1
         self.stream.write(b']')
     def _MAP(self, v):
         self.stream.write(b'{')
         delim = b''
+        self._depth += 1
         for key, value in v.items():
             self.stream.writelines([delim, b"'", self._esc(UnicodeType(key)), b"':"])
             self._generate(value)
             delim = b','
+        self._depth -= 1
         self.stream.write(b'}')
 
     def _esc(self, data, quote=b"'"):
@@ -466,6 +481,9 @@ class LLSDNotationFormatter(LLSDBaseFormatter):
 
         :param something: a python object (typically a dict) to be serialized.
         """
+        if self._depth > MAX_FORMAT_DEPTH:
+            raise LLSDSerializationError("Cannot serialize depth of more than %d" % MAX_FORMAT_DEPTH)
+
         t = type(something)
         handler = self.type_map.get(t)
         if handler:

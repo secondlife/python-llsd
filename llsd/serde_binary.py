@@ -5,7 +5,7 @@ import struct
 import uuid
 
 from llsd.base import (_LLSD, LLSDBaseParser, LLSDSerializationError, BINARY_HEADER,
-                       _str_to_bytes, binary, is_integer, is_string, uri)
+                       MAX_FORMAT_DEPTH, MAX_PARSE_DEPTH, _str_to_bytes, binary, is_integer, is_string, uri)
 
 
 try:
@@ -15,14 +15,13 @@ except NameError:
     # Python 3: 'range()' is already lazy
     pass
 
-
 class LLSDBinaryParser(LLSDBaseParser):
     """
     Parse application/llsd+binary to a python object.
 
     See http://wiki.secondlife.com/wiki/LLSD#Binary_Serialization
     """
-    __slots__ = ['_dispatch', '_keep_binary']
+    __slots__ = ['_dispatch', '_keep_binary', '_depth']
 
     def __init__(self):
         super(LLSDBinaryParser, self).__init__()
@@ -63,6 +62,7 @@ class LLSDBinaryParser(LLSDBaseParser):
         # entries in _dispatch.
         for c, func in _dispatch_dict.items():
             self._dispatch[ord(c)] = func
+        self._depth = 0
 
     def parse(self, something, ignore_binary = False):
         """
@@ -82,6 +82,9 @@ class LLSDBinaryParser(LLSDBaseParser):
 
     def _parse(self):
         "The actual parser which is called recursively when necessary."
+        if self._depth > MAX_PARSE_DEPTH:
+            self._error("Parse depth exceeded maximum depth of %d." % MAX_PARSE_DEPTH)
+
         cc = self._getc()
         try:
             func = self._dispatch[ord(cc)]
@@ -97,6 +100,7 @@ class LLSDBinaryParser(LLSDBaseParser):
         count = 0
         cc = self._getc()
         key = b''
+        self._depth += 1
         while (cc != b'}') and (count < size):
             if cc == b'k':
                 key = self._parse_string()
@@ -110,16 +114,19 @@ class LLSDBinaryParser(LLSDBaseParser):
             cc = self._getc()
         if cc != b'}':
             self._error("invalid map close token")
+        self._depth -= 1
         return rv
 
     def _parse_array(self):
         "Parse a single llsd array"
         rv = []
+        self._depth += 1
         size = struct.unpack("!i", self._getc(4))[0]
         for count in range(size):
             rv.append(self._parse())
         if self._getc() != b']':
             self._error("invalid array close token")
+        self._depth -= 1
         return rv
 
     def _parse_string(self):
@@ -164,15 +171,19 @@ def format_binary(something):
 
 def write_binary(stream, something):
     stream.write(b'<?llsd/binary?>\n')
-    _write_binary_recurse(stream, something)
+    _write_binary_recurse(stream, something, 0)
 
 
-def _write_binary_recurse(stream, something):
+def _write_binary_recurse(stream, something, depth):
     "Binary formatter workhorse."
+
+    if depth > MAX_FORMAT_DEPTH:
+        raise LLSDSerializationError("Cannot serialize depth of more than %d" % MAX_FORMAT_DEPTH)
+
     if something is None:
         stream.write(b'!')
     elif isinstance(something, _LLSD):
-        _write_binary_recurse(stream, something.thing)
+        _write_binary_recurse(stream, something.thing, depth)
     elif isinstance(something, bool):
         stream.write(b'1' if something else b'0')
     elif is_integer(something):
@@ -202,27 +213,27 @@ def _write_binary_recurse(stream, something):
         seconds_since_epoch = calendar.timegm(something.timetuple())
         stream.writelines([b'd', struct.pack('<d', seconds_since_epoch)])
     elif isinstance(something, (list, tuple)):
-        _write_list(stream, something)
+        _write_list(stream, something, depth)
     elif isinstance(something, dict):
         stream.writelines([b'{', struct.pack('!i', len(something))])
         for key, value in something.items():
             key = _str_to_bytes(key)
             stream.writelines([b'k', struct.pack('!i', len(key)), key])
-            _write_binary_recurse(stream, value)
+            _write_binary_recurse(stream, value, depth+1)
         stream.write(b'}')
     else:
         try:
-            return _write_list(stream, list(something))
+            return _write_list(stream, list(something), depth)
         except TypeError:
             raise LLSDSerializationError(
                 "Cannot serialize unknown type: %s (%s)" %
                 (type(something), something))
 
 
-def _write_list(stream, something):
+def _write_list(stream, something, depth):
     stream.writelines([b'[', struct.pack('!i', len(something))])
     for item in something:
-        _write_binary_recurse(stream, item)
+        _write_binary_recurse(stream, item, depth+1)
     stream.write(b']')
 
 

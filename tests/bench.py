@@ -45,6 +45,9 @@ BENCH_DATA_XML = b"""<?xml version="1.0" encoding="UTF-8"?>
 </llsd>"""
 
 _bench_data = llsd.parse_xml(BENCH_DATA_XML)
+
+    
+    
 BENCH_DATA_BINARY = llsd.format_binary(_bench_data)
 BENCH_DATA_NOTATION = llsd.format_notation(_bench_data)
 
@@ -78,6 +81,40 @@ def binary_stream():
         f.seek(0)
         yield f
 
+def build_deep_xml():
+    deep_data = {}
+    curr_data = deep_data
+    for i in range(198):
+        curr_data["curr_data"] = {}
+        curr_data["integer"] = 7
+        curr_data["string"] = "string"
+        curr_data["map"] = { "item1": 2.345, "item2": [1,2,3], "item3": {"item4": llsd.uri("http://foo.bar.com")}}
+        curr_data = curr_data["curr_data"]
+        
+    return deep_data
+_deep_bench_data = build_deep_xml()
+
+def build_wide_xml():
+    
+    wide_xml = b"""
+<?xml version="1.0" encoding="UTF-8"?><llsd><map><key>wide_array</key><array>"
+"""
+    wide_data = {}
+    for i in range(100000):
+        wide_data["item"+str(i)] = {"item1":2.345, "item2": [1,2,3], "item3": "string", "item4":{"subitem": llsd.uri("http://foo.bar.com")}}
+    return wide_data
+_wide_bench_data = build_wide_xml()
+
+def build_wide_array_xml():
+    
+    wide_xml = b"""
+<?xml version="1.0" encoding="UTF-8"?><llsd><map><key>wide_array</key><array>"
+"""
+    wide_data = []
+    for i in range(100000):
+        wide_data.append([2.345,[1,2,3], "string", [llsd.uri("http://foo.bar.com")]])
+    return wide_data
+_wide_array_bench_data = build_wide_array_xml()
 
 def bench_stream(parse, stream):
     ret = parse(stream)
@@ -125,3 +162,35 @@ def test_format_notation(benchmark):
 
 def test_format_binary(benchmark):
     benchmark(llsd.format_binary, _bench_data)
+
+def test_format_xml_deep(benchmark):
+    benchmark(llsd.format_xml, _deep_bench_data)
+
+def test_format_xml_wide(benchmark):
+    benchmark(llsd.format_xml, _wide_bench_data)
+
+def test_format_notation_deep(benchmark):
+    benchmark(llsd.format_notation, _deep_bench_data)
+
+def test_format_notation_wide(benchmark):
+    benchmark(llsd.format_notation, _wide_bench_data)
+
+def test_format_notation_wide_array(benchmark):
+    benchmark(llsd.format_notation, _wide_array_bench_data)
+
+def test_format_binary_deep(benchmark):
+    benchmark(llsd.format_binary, _deep_bench_data)
+
+def test_format_binary_wide(benchmark):
+    benchmark(llsd.format_binary, _wide_bench_data)
+
+def test_format_binary_wide_array(benchmark):
+    benchmark(llsd.format_binary, _wide_array_bench_data)
+
+def test_parse_xml_deep(benchmark):
+    deep_data = llsd.format_xml(_deep_bench_data)
+    benchmark(llsd.parse_xml, deep_data)
+
+def test_parse_binary_deep(benchmark):
+    deep_data = llsd.format_binary(_deep_bench_data)
+    benchmark(llsd.parse_binary, deep_data)

@@ -16,7 +16,7 @@ import uuid
 import pytest
 
 import llsd
-from llsd.base import PY2, is_integer, is_string, is_unicode
+from llsd.base import PY2, is_integer, is_string, is_unicode, MAX_FORMAT_DEPTH, MAX_PARSE_DEPTH
 from llsd.serde_xml import remove_invalid_xml_bytes
 from tests.fuzz import LLSDFuzzer
 
@@ -527,6 +527,26 @@ class LLSDNotationUnitTest(unittest.TestCase):
     def testParseNotationInvalidHex(self):
         self.assertRaises(llsd.LLSDParseError, self.llsd.parse, b"'\\xzz'")
 
+    def testDeepMap(self):
+        """
+        Test formatting of a deeply nested map
+        """
+
+        test_map = {"foo":"bar", "depth":0}
+        max_depth = MAX_FORMAT_DEPTH - 1
+        for depth in range(max_depth):
+            test_map = {"foo":"bar", "depth":depth, "next":test_map}
+
+        # this should not throw an exception.
+        test_notation_out = self.llsd.as_notation(test_map)
+
+        test_notation_parsed = self.llsd.parse(io.BytesIO(test_notation_out))
+        self.assertEqual(test_map, test_notation_parsed)
+
+        test_map = {"foo":"bar", "depth":depth, "next":test_map}
+        # this should throw an exception.
+        self.assertRaises(llsd.LLSDSerializationError, self.llsd.as_notation, test_map)
+
 
 class LLSDBinaryUnitTest(unittest.TestCase):
     """
@@ -964,6 +984,26 @@ class LLSDBinaryUnitTest(unittest.TestCase):
 
         self.assertEqual('\t\x07\x08\x0c\n\r\t\x0b\x0fp', llsd.parse(delimited_string))
 
+    def testDeepMap(self):
+        """
+        Test formatting of a deeply nested map
+        """
+
+        test_map = {"foo":"bar", "depth":0}
+        max_depth = MAX_FORMAT_DEPTH -1
+        for depth in range(max_depth):
+            test_map = {"foo":"bar", "depth":depth, "next":test_map}
+
+        # this should not throw an exception.
+        test_binary_out = self.llsd.as_binary(test_map)
+
+        test_binary_parsed = self.llsd.parse(io.BytesIO(test_binary_out))
+        self.assertEqual(test_map, test_binary_parsed)
+
+        test_map = {"foo":"bar", "depth":depth, "next":test_map}
+        # this should throw an exception.
+        self.assertRaises(llsd.LLSDSerializationError, self.llsd.as_binary, test_map)
+
 
 
 class LLSDPythonXMLUnitTest(unittest.TestCase):
@@ -1345,20 +1385,6 @@ class LLSDPythonXMLUnitTest(unittest.TestCase):
                                   map_within_map_xml)
         self.assertXMLRoundtrip({}, blank_map_xml)
 
-    def testDeepMap(self):
-        """
-        Test that formatting a deeply nested map does not cause a RecursionError
-        """
-
-        test_map = {"foo":"bar", "depth":0, "next":None}
-        max_depth = 200
-        for depth in range(max_depth):
-            test_map = {"foo":"bar", "depth":depth, "next":test_map}
-
-        # this should not throw an exception.
-        test_xml = self.llsd.as_xml(test_map)
-
-
     def testBinary(self):
         """
         Test the parse and serialization of input type : binary.
@@ -1492,6 +1518,26 @@ class LLSDPythonXMLUnitTest(unittest.TestCase):
         format_xml_result = self.llsd.as_xml(python_object)
         self.assertEqual(result[result.find(b"?>") + 2: len(result)],
                          format_xml_result[format_xml_result.find(b"?>") + 2: len(format_xml_result)])
+
+    def testDeepMap(self):
+        """
+        Test formatting of a deeply nested map
+        """
+
+        test_map = {"foo":"bar", "depth":0}
+        max_depth = MAX_FORMAT_DEPTH - 1
+        for depth in range(max_depth):
+            test_map = {"foo":"bar", "depth":depth, "next":test_map}
+
+        # this should not throw an exception.
+        test_xml_out = self.llsd.as_xml(test_map)
+
+        test_xml_parsed = self.llsd.parse(io.BytesIO(test_xml_out))
+        self.assertEqual(test_map, test_xml_parsed)
+
+        test_map = {"foo":"bar", "depth":depth, "next":test_map}
+        # this should throw an exception.
+        self.assertRaises(llsd.LLSDSerializationError, self.llsd.as_xml, test_map)
 
     def testLLSDSerializationFailure(self):
         """
