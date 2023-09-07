@@ -98,18 +98,18 @@ class LLSDXMLFormatter(LLSDBaseFormatter):
         self.stream.writelines([b'<uuid>', str(v).encode('utf-8'), b'</uuid>', self._eol])
     def _BINARY(self, v):
         self.stream.writelines([b'<binary>', base64.b64encode(v).strip(), b'</binary>', self._eol])
-    def _STRING(self, v):
-        # We don't simply have a function that encapsulates the PY2 vs PY3 calls,
-        # as that results in another function call and is slightly less performant
-        if PY2:    # pragma: no cover
+        
+    if PY2:
+        def _STRING(self, v):
             return self.stream.writelines([b'<string>', _str_to_bytes(xml_esc(v)), b'</string>', self._eol])
-        self.stream.writelines([b'<string>', v.translate(XML_ESC_TRANS).encode('utf-8'), b'</string>', self._eol])
-    def _URI(self, v):
-        # We don't simply have a function that encapsulates the PY2 vs PY3 calls,
-        # as that results in another function call and is slightly less performant
-        if PY2:    # pragma: no cover
+        def _URI(self, v):
             return self.stream.writelines([b'<uri>', _str_to_bytes(xml_esc(v)), b'</uri>', self._eol])
-        self.stream.writelines([b'<uri>', str(v).translate(XML_ESC_TRANS).encode('utf-8'), b'</uri>', self._eol])
+    else:
+        def _STRING(self, v):
+            self.stream.writelines([b'<string>', v.translate(XML_ESC_TRANS).encode('utf-8'), b'</string>', self._eol])
+        def _URI(self, v):
+            self.stream.writelines([b'<uri>', str(v).translate(XML_ESC_TRANS).encode('utf-8'), b'</uri>', self._eol])
+    
     def _DATE(self, v):
         self.stream.writelines([b'<date>', _format_datestr(v), b'</date>', self._eol])
     def _ARRAY(self, v):
