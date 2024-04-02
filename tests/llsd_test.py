@@ -12,13 +12,16 @@ import struct
 import time
 import unittest
 import uuid
+from os import path
 
 import pytest
 
 import llsd
-from llsd.base import PY2, is_integer, is_string, is_unicode, MAX_FORMAT_DEPTH, MAX_PARSE_DEPTH
+from llsd.base import PY2, is_integer, is_string, is_unicode, MAX_FORMAT_DEPTH
 from llsd.serde_xml import remove_invalid_xml_bytes
 from tests.fuzz import LLSDFuzzer
+
+FIXTURES_DIR = path.join(path.dirname(__file__), 'fixtures')
 
 
 class Foo(object):
@@ -1405,6 +1408,15 @@ class LLSDPythonXMLUnitTest(unittest.TestCase):
         python_binary = llsd.binary(b'');
 
         self.assertXMLRoundtrip(python_binary, blank_binary_xml)
+    
+    @pytest.mark.skipif(PY2, reason="Object order between python 2 and 3 differs")
+    def testViewerAutobuildRoundTrip(self):
+        """Test that llsd does not muck up the viewer autobuild"""
+        with open(path.join(FIXTURES_DIR, "viewer-autobuild.xml"), "rb") as f:
+            autobuild_bytes = f.read()
+            autobuild_parsed = llsd.parse_xml(autobuild_bytes)
+        assert autobuild_bytes.decode("utf8") == llsd.format_pretty_xml(autobuild_parsed).decode("utf8")
+        
 
     def testXMLOfAllTypes(self):
         """
@@ -1519,7 +1531,8 @@ class LLSDPythonXMLUnitTest(unittest.TestCase):
       </map>
     </array>
   </map>
-</llsd>""")
+</llsd>
+""")
 
         # check whether the output_xml contains whitespaces and new line character
         whitespaces_count = output_xml.count(b' ')
