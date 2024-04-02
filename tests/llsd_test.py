@@ -1503,6 +1503,24 @@ class LLSDPythonXMLUnitTest(unittest.TestCase):
 
         output_xml = llsd.format_pretty_xml(python_object)
 
+        with open("foo.llsd.xml", "wb") as f:
+            f.write(output_xml)
+
+        self.assertEqual(output_xml.decode("utf8"), """<?xml version="1.0" ?>
+<llsd>
+<map>
+    <key>id</key>
+    <array>
+      <string>string1</string>
+      <integer>123</integer>
+      <map>
+        <key>name</key>
+        <integer>123</integer>
+      </map>
+    </array>
+  </map>
+</llsd>""")
+
         # check whether the output_xml contains whitespaces and new line character
         whitespaces_count = output_xml.count(b' ')
         newline_count = output_xml.count(b'\n')
@@ -1944,3 +1962,5 @@ class MapConstraints(unittest.TestCase):
         llsdmap=llsd.LLSD({uuid.UUID(int=0) : 'uuid'})
         self.assertEqual(llsd.format_xml(llsdmap), b'<?xml version="1.0" ?><llsd><map><key>00000000-0000-0000-0000-000000000000</key><string>uuid</string></map></llsd>')
         self.assertEqual(llsd.format_notation(llsdmap), b"{'00000000-0000-0000-0000-000000000000':'uuid'}")
+
+
