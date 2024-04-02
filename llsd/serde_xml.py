@@ -119,6 +119,7 @@ class LLSDXMLFormatter(LLSDBaseFormatter):
             self._indent()
             self._generate(item)
         self._depth -= 1
+        self._indent()
         self.stream.writelines([b'</array>', self._eol])
     def _MAP(self, v):
         self.stream.writelines([b'<map>', self._eol])
@@ -162,7 +163,7 @@ class LLSDXMLFormatter(LLSDBaseFormatter):
         self.stream.writelines([b'<?xml version="1.0" ?>', self._eol,
                                 b'<llsd>', self._eol])
         self._generate(something)
-        self.stream.write(b'</llsd>')
+        self.stream.write(b'</llsd>' + self._eol)
 
 
 class LLSDXMLPrettyFormatter(LLSDXMLFormatter):
