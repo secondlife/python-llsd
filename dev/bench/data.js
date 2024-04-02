@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1706806195576,
+  "lastUpdate": 1712039823734,
   "repoUrl": "https://github.com/secondlife/python-llsd",
   "entries": {
     "Python Benchmarks": [
@@ -1638,6 +1638,163 @@ window.BENCHMARK_DATA = {
             "unit": "iter/sec",
             "range": "stddev: 0.000036906851917373934",
             "extra": "mean: 3.937329119522194 msec\nrounds: 251"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "signal@lindenlab.com",
+            "name": "Signal Linden",
+            "username": "bennettgoble"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "acb55e3d613f131371d4a470f772f0e322f4bcce",
+          "message": "Merge pull request #23 from secondlife/signal/fix-array-indent\n\nFix array indentation of pretty xml",
+          "timestamp": "2024-04-01T23:35:52-07:00",
+          "tree_id": "bd5010d3fc8eb79caa56e9d25cdcf456ee4b3bc1",
+          "url": "https://github.com/secondlife/python-llsd/commit/acb55e3d613f131371d4a470f772f0e322f4bcce"
+        },
+        "date": 1712039822653,
+        "tool": "pytest",
+        "benches": [
+          {
+            "name": "tests/bench.py::test_parse_xml_stream",
+            "value": 15338.036976363388,
+            "unit": "iter/sec",
+            "range": "stddev: 0.000004331856709993063",
+            "extra": "mean: 65.19739139637265 usec\nrounds: 4254"
+          },
+          {
+            "name": "tests/bench.py::test_parse_notation_stream",
+            "value": 5332.396264314848,
+            "unit": "iter/sec",
+            "range": "stddev: 0.0000245948764983066",
+            "extra": "mean: 187.53294962194425 usec\nrounds: 3176"
+          },
+          {
+            "name": "tests/bench.py::test_parse_binary_stream",
+            "value": 19284.815864952467,
+            "unit": "iter/sec",
+            "range": "stddev: 0.000027818135030237138",
+            "extra": "mean: 51.854267471506645 usec\nrounds: 10188"
+          },
+          {
+            "name": "tests/bench.py::test_parse_notation_bytes",
+            "value": 5854.368214946115,
+            "unit": "iter/sec",
+            "range": "stddev: 0.000025867648343098357",
+            "extra": "mean: 170.81262457100237 usec\nrounds: 4371"
+          },
+          {
+            "name": "tests/bench.py::test_parse_xml_bytes",
+            "value": 19263.501614767185,
+            "unit": "iter/sec",
+            "range": "stddev: 0.000005072631884570145",
+            "extra": "mean: 51.9116420263599 usec\nrounds: 9199"
+          },
+          {
+            "name": "tests/bench.py::test_parse_binary_bytes",
+            "value": 21464.343697156215,
+            "unit": "iter/sec",
+            "range": "stddev: 0.000029175897140904308",
+            "extra": "mean: 46.588892449224474 usec\nrounds: 12078"
+          },
+          {
+            "name": "tests/bench.py::test_format_xml",
+            "value": 24926.216480845855,
+            "unit": "iter/sec",
+            "range": "stddev: 0.00001046848390926289",
+            "extra": "mean: 40.118403078478984 usec\nrounds: 10720"
+          },
+          {
+            "name": "tests/bench.py::test_format_notation",
+            "value": 29926.614027771157,
+            "unit": "iter/sec",
+            "range": "stddev: 0.000011045711956936568",
+            "extra": "mean: 33.41507325459622 usec\nrounds: 13651"
+          },
+          {
+            "name": "tests/bench.py::test_format_binary",
+            "value": 31497.118948059262,
+            "unit": "iter/sec",
+            "range": "stddev: 0.000001664586674172829",
+            "extra": "mean: 31.74893556610886 usec\nrounds: 10988"
+          },
+          {
+            "name": "tests/bench.py::test_format_xml_deep",
+            "value": 285.4127173566864,
+            "unit": "iter/sec",
+            "range": "stddev: 0.000039951208860490064",
+            "extra": "mean: 3.5036981157019658 msec\nrounds: 242"
+          },
+          {
+            "name": "tests/bench.py::test_format_xml_wide",
+            "value": 0.7331961327654465,
+            "unit": "iter/sec",
+            "range": "stddev: 0.004417990449218888",
+            "extra": "mean: 1.3638915363999957 sec\nrounds: 5"
+          },
+          {
+            "name": "tests/bench.py::test_format_notation_deep",
+            "value": 356.5444582953051,
+            "unit": "iter/sec",
+            "range": "stddev: 0.00011026263356797399",
+            "extra": "mean: 2.804699320755556 msec\nrounds: 318"
+          },
+          {
+            "name": "tests/bench.py::test_format_notation_wide",
+            "value": 0.9236691727590265,
+            "unit": "iter/sec",
+            "range": "stddev: 0.007131136617704611",
+            "extra": "mean: 1.0826387082000053 sec\nrounds: 5"
+          },
+          {
+            "name": "tests/bench.py::test_format_notation_wide_array",
+            "value": 1.5434002125635595,
+            "unit": "iter/sec",
+            "range": "stddev: 0.010704752604469039",
+            "extra": "mean: 647.920087 msec\nrounds: 5"
+          },
+          {
+            "name": "tests/bench.py::test_format_binary_deep",
+            "value": 297.09737409990527,
+            "unit": "iter/sec",
+            "range": "stddev: 0.00003245059419092853",
+            "extra": "mean: 3.3658998267138127 msec\nrounds: 277"
+          },
+          {
+            "name": "tests/bench.py::test_format_binary_wide",
+            "value": 0.7493606807246287,
+            "unit": "iter/sec",
+            "range": "stddev: 0.004469532851903014",
+            "extra": "mean: 1.3344708705999948 sec\nrounds: 5"
+          },
+          {
+            "name": "tests/bench.py::test_format_binary_wide_array",
+            "value": 1.0724915981351262,
+            "unit": "iter/sec",
+            "range": "stddev: 0.005393651071731648",
+            "extra": "mean: 932.408236800012 msec\nrounds: 5"
+          },
+          {
+            "name": "tests/bench.py::test_parse_xml_deep",
+            "value": 332.52609466548023,
+            "unit": "iter/sec",
+            "range": "stddev: 0.005866860812937119",
+            "extra": "mean: 3.007282784847293 msec\nrounds: 330"
+          },
+          {
+            "name": "tests/bench.py::test_parse_binary_deep",
+            "value": 252.77433834590374,
+            "unit": "iter/sec",
+            "range": "stddev: 0.00011968375288348899",
+            "extra": "mean: 3.956097784861258 msec\nrounds: 251"
           }
         ]
       }
