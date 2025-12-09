@@ -1977,3 +1977,47 @@ class MapConstraints(unittest.TestCase):
         self.assertEqual(llsd.format_notation(llsdmap), b"{'00000000-0000-0000-0000-000000000000':'uuid'}")
 
 
+class InvalidInputTypes(unittest.TestCase):
+    '''
+    Tests for handling invalid input types that should raise LLSDParseError
+    instead of hanging or consuming infinite memory.
+    '''
+
+    def test_parse_magicmock_raises_error(self):
+        '''
+        Parsing a MagicMock object should raise LLSDParseError, not hang.
+        This is a regression test for a bug where llsd.parse() would go into
+        an infinite loop when passed a MagicMock (e.g., from an improperly
+        mocked requests.Response.content).
+        '''
+        from unittest.mock import MagicMock
+        mock = MagicMock()
+        with self.assertRaises(llsd.LLSDParseError) as context:
+            llsd.parse(mock)
+        self.assertIn('MagicMock', str(context.exception))
+
+    def test_parse_string_raises_error(self):
+        '''
+        Parsing a string (not bytes) should raise LLSDParseError.
+        '''
+        with self.assertRaises(llsd.LLSDParseError) as context:
+            llsd.parse('not bytes')
+        self.assertIn('str', str(context.exception))
+
+    def test_parse_none_raises_error(self):
+        '''
+        Parsing None should raise LLSDParseError.
+        '''
+        with self.assertRaises(llsd.LLSDParseError) as context:
+            llsd.parse(None)
+        self.assertIn('NoneType', str(context.exception))
+
+    def test_parse_int_raises_error(self):
+        '''
+        Parsing an integer should raise LLSDParseError.
+        '''
+        with self.assertRaises(llsd.LLSDParseError) as context:
+            llsd.parse(42)
+        self.assertIn('int', str(context.exception))
+
+

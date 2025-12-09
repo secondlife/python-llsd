@@ -410,14 +410,26 @@ class LLSDBaseParser(object):
             # string is so large that the overhead of copying it into a
             # BytesIO is significant, advise caller to pass a stream instead.
             self._stream = io.BytesIO(something)
-        elif something.seekable():
-            # 'something' is already a seekable stream, use directly
-            self._stream = something
+        elif isinstance(something, io.IOBase):
+            # 'something' is a proper IO stream
+            if something.seekable():
+                # Seekable stream, use directly
+                self._stream = something
+            elif something.readable():
+                # Readable but not seekable, wrap in BufferedReader
+                self._stream = io.BufferedReader(something)
+            else:
+                raise LLSDParseError(
+                    "Cannot parse LLSD from non-readable stream."
+                )
         else:
-            # 'something' isn't seekable, wrap in BufferedReader
-            # (let BufferedReader handle the problem of passing an
-            # inappropriate object)
-            self._stream = io.BufferedReader(something)
+            # Invalid input type - raise a clear error
+            # This catches MagicMock and other non-stream objects that might
+            # have read/seek attributes but aren't actual IO streams
+            raise LLSDParseError(
+                f"Cannot parse LLSD from {type(something).__name__}. "
+                "Expected bytes or a file-like object (io.IOBase subclass)."
+            )
 
     def starts_with(self, pattern):
         """
