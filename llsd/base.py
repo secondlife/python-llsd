@@ -427,8 +427,10 @@ class LLSDBaseParser(object):
             # This catches MagicMock and other non-stream objects that might
             # have read/seek attributes but aren't actual IO streams
             raise LLSDParseError(
-                f"Cannot parse LLSD from {type(something).__name__}. "
-                "Expected bytes or a file-like object (io.IOBase subclass)."
+                "Cannot parse LLSD from {0}. "
+                "Expected bytes or a file-like object (io.IOBase subclass).".format(
+                    type(something).__name__
+                )
             )
 
     def starts_with(self, pattern):
