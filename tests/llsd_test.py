@@ -2022,4 +2022,14 @@ class InvalidInputTypes(unittest.TestCase):
             llsd.parse(42)
         self.assertIn('int', str(context.exception))
 
+    def test_parse_non_seekable_stream_raises_error(self):
+        '''
+        Parsing a non-seekable stream should raise LLSDParseError.
+        '''
+        stream = io.BytesIO()
+        stream.seekable = lambda: False
+        with self.assertRaises(llsd.LLSDParseError) as context:
+            llsd.parse(stream)
+        self.assertIn('non-seekable', str(context.exception))
+
 
