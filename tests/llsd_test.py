@@ -1990,15 +1990,20 @@ class InvalidInputTypes(unittest.TestCase):
         an infinite loop when passed a MagicMock (e.g., from an improperly
         mocked requests.Response.content).
         '''
-        from unittest.mock import MagicMock
+        try:
+            from unittest.mock import MagicMock
+        except ImportError:
+            from mock import MagicMock  # Python 2.7
         mock = MagicMock()
         with self.assertRaises(llsd.LLSDParseError) as context:
             llsd.parse(mock)
         self.assertIn('MagicMock', str(context.exception))
 
+    @unittest.skipIf(PY2, "str is bytes in Python 2")
     def test_parse_string_raises_error(self):
         '''
         Parsing a string (not bytes) should raise LLSDParseError.
+        Only applies to Python 3 where str and bytes are distinct.
         '''
         with self.assertRaises(llsd.LLSDParseError) as context:
             llsd.parse('not bytes')
