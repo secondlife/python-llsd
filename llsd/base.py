@@ -411,16 +411,12 @@ class LLSDBaseParser(object):
             # BytesIO is significant, advise caller to pass a stream instead.
             self._stream = io.BytesIO(something)
         elif isinstance(something, io.IOBase):
-            # 'something' is a proper IO stream
+            # 'something' is a proper IO stream - must be seekable for parsing
             if something.seekable():
-                # Seekable stream, use directly
                 self._stream = something
-            elif something.readable():
-                # Readable but not seekable, wrap in BufferedReader
-                self._stream = io.BufferedReader(something)
             else:
                 raise LLSDParseError(
-                    "Cannot parse LLSD from non-readable stream."
+                    "Cannot parse LLSD from non-seekable stream."
                 )
         else:
             # Invalid input type - raise a clear error
