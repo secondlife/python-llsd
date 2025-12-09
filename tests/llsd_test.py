@@ -1977,6 +1977,7 @@ class MapConstraints(unittest.TestCase):
         self.assertEqual(llsd.format_notation(llsdmap), b"{'00000000-0000-0000-0000-000000000000':'uuid'}")
 
 
+@unittest.skipIf(PY2, "These tests require Python 3")
 class InvalidInputTypes(unittest.TestCase):
     '''
     Tests for handling invalid input types that should raise LLSDParseError
@@ -1990,16 +1991,12 @@ class InvalidInputTypes(unittest.TestCase):
         an infinite loop when passed a MagicMock (e.g., from an improperly
         mocked requests.Response.content).
         '''
-        try:
-            from unittest.mock import MagicMock
-        except ImportError:
-            from mock import MagicMock  # Python 2.7
+        from unittest.mock import MagicMock
         mock = MagicMock()
         with self.assertRaises(llsd.LLSDParseError) as context:
             llsd.parse(mock)
         self.assertIn('MagicMock', str(context.exception))
 
-    @unittest.skipIf(PY2, "str is bytes in Python 2")
     def test_parse_string_raises_error(self):
         '''
         Parsing a string (not bytes) should raise LLSDParseError.
