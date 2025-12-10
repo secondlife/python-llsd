@@ -24,3 +24,4 @@ jobs:
           path-to-signatures: signatures.json
           remote-organization-name: secondlife
           remote-repository-name: cla-signatures
+          allowlist: dependabot[bot]
