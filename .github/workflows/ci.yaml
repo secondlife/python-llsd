@@ -22,9 +22,18 @@ jobs:
     env:
       PYTHON: ${{ matrix.python-version }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           fetch-depth: 0 # fetch all history for setuptools_scm to be able to read tags
+
+      - name: Fix Debian Buster repositories (EOL)
+        if: matrix.image-variant == '-buster'
+        run: |
+          # Debian Buster reached EOL, switch to archive.debian.org
+          # Remove security repo entirely (not available in archive) and use main archive
+          sed -i 's|deb.debian.org|archive.debian.org|g' /etc/apt/sources.list
+          sed -i '/security.debian.org/d' /etc/apt/sources.list
+          sed -i '/buster-updates/d' /etc/apt/sources.list
 
       - name: Install python dependencies
         run: |
