@@ -65,7 +65,7 @@ jobs:
           fail_ci_if_error: true
           files: .coverage.${{ steps.pyenv.outputs.value }}.xml
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v5
         if: matrix.python-version == '2.7' || matrix.python-version == '3.8'
         with:
           name: dist-${{ matrix.python-version }}
