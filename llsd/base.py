@@ -424,7 +424,7 @@ class LLSDBaseParser(object):
             # have read/seek attributes but aren't actual IO streams
             raise LLSDParseError(
                 "Cannot parse LLSD from {0}. "
-                "Expected bytes or a file-like object (io.IOBase subclass).".format(
+                "Expected bytes or a seekable io.IOBase object.".format(
                     type(something).__name__
                 )
             )

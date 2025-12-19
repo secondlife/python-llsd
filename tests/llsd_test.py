@@ -1977,13 +1977,13 @@ class MapConstraints(unittest.TestCase):
         self.assertEqual(llsd.format_notation(llsdmap), b"{'00000000-0000-0000-0000-000000000000':'uuid'}")
 
 
-@unittest.skipIf(PY2, "These tests require Python 3")
 class InvalidInputTypes(unittest.TestCase):
     '''
     Tests for handling invalid input types that should raise LLSDParseError
     instead of hanging or consuming infinite memory.
     '''
 
+    @unittest.skipIf(PY2, "MagicMock requires Python 3")
     def test_parse_magicmock_raises_error(self):
         '''
         Parsing a MagicMock object should raise LLSDParseError, not hang.
@@ -2003,8 +2003,8 @@ class InvalidInputTypes(unittest.TestCase):
         Only applies to Python 3 where str and bytes are distinct.
         '''
         with self.assertRaises(llsd.LLSDParseError) as context:
-            llsd.parse('not bytes')
-        self.assertIn('str', str(context.exception))
+            llsd.parse(b'not bytes'.decode('ascii'))
+        self.assertIn('unicode' if PY2 else 'str', str(context.exception))
 
     def test_parse_none_raises_error(self):
         '''
