@@ -69,13 +69,15 @@ class LLSDXMLFormatter(LLSDBaseFormatter):
     interface to this functionality.
     """
 
-    def __init__(self, indent_atom = b'', eol = b''):
+    def __init__(self, indent_atom: bytes = b'', eol: bytes = b'', c_compat: bool = False, sort_maps: bool = False):
         "Construct a serializer."
         # Call the super class constructor so that we have the type map
         super(LLSDXMLFormatter, self).__init__()
         self._indent_atom = indent_atom
         self._eol = eol
         self._depth = 1
+        self.c_compat = c_compat
+        self.sort_maps = sort_maps
 
     def _indent(self):
         pass
@@ -85,13 +87,22 @@ class LLSDXMLFormatter(LLSDBaseFormatter):
     def _UNDEF(self, _v):
         self.stream.writelines([b'<undef/>', self._eol])
     def _BOOLEAN(self, v):
-        if v:
-            return self.stream.writelines([b'<boolean>true</boolean>', self._eol])
-        self.stream.writelines([b'<boolean>false</boolean>', self._eol])
+        if self.c_compat:
+            s = b'1' if v else b'0'
+        else:
+            s = b'true' if v else b'false'
+        self.stream.writelines([b'<boolean>', s, b'</boolean>', self._eol])
     def _INTEGER(self, v):
         self.stream.writelines([b'<integer>', str(v).encode('utf-8'), b'</integer>', self._eol])
     def _REAL(self, v):
-        self.stream.writelines([b'<real>', str(v).encode('utf-8'),  b'</real>', self._eol])
+        if self.c_compat:
+            if int(v) == v:
+                s = str(int(v))
+            else:
+                s = f"{v:.25g}"
+        else:
+            s = str(v)
+        self.stream.writelines([b'<real>', s.encode('utf-8'),  b'</real>', self._eol])
     def _UUID(self, v):
         if v.int == 0:
             return self.stream.writelines([b'<uuid/>', self._eol])
@@ -124,7 +135,11 @@ class LLSDXMLFormatter(LLSDBaseFormatter):
     def _MAP(self, v):
         self.stream.writelines([b'<map>', self._eol])
         self._depth += 1
-        for key, value in v.items():
+        keys = v.keys()
+        if self.sort_maps:
+            keys = sorted(keys)
+        for key in keys:
+            value = v[key]
             self._indent()
             if PY2:     # pragma: no cover
                 self.stream.writelines([b'<key>',
@@ -162,6 +177,7 @@ class LLSDXMLFormatter(LLSDBaseFormatter):
         """
         self.stream.writelines([b'<?xml version="1.0" ?>', self._eol,
                                 b'<llsd>', self._eol])
+        self._indent()
         self._generate(something)
         self.stream.write(b'</llsd>' + self._eol)
 
@@ -179,17 +195,29 @@ class LLSDXMLPrettyFormatter(LLSDXMLFormatter):
     This class is not necessarily suited for serializing very large objects.
     It sorts on dict (llsd map) keys alphabetically to ease human reading.
     """
-    def __init__(self, indent_atom = b'  ', eol = b'\n'):
+    def __init__(self, indent_atom: bytes = b'  ', eol: bytes = b'\n', c_compat: bool = False, sort_maps: bool = True):
         "Construct a pretty serializer."
         # Call the super class constructor so that we have the type map
-        super(LLSDXMLPrettyFormatter, self).__init__(indent_atom = indent_atom, eol = eol)
+        super(LLSDXMLPrettyFormatter, self).__init__(indent_atom = indent_atom, eol = eol, c_compat=c_compat, sort_maps = sort_maps)
 
     def _indent(self):
         "Write an indentation based on the atom and indentation level."
         self.stream.writelines([self._indent_atom] * self._depth)
 
+    def _ARRAY(self, v):
+        if not v:
+            self.stream.writelines([b'<array />', self._eol])
+        else:
+            super()._ARRAY(v)
 
-def format_pretty_xml(something):
+    def _STRING(self, v):
+        if not v:
+            self.stream.writelines([b'<string />', self._eol])
+        else:
+            super()._STRING(v)
+
+
+def format_pretty_xml(something, indent: int = 4, c_compat: bool = False, sort_maps: bool = True):
     """
     Serialize a python object as 'pretty' application/llsd+xml.
 
@@ -205,10 +233,10 @@ def format_pretty_xml(something):
     objects. It sorts on dict (llsd map) keys alphabetically to ease human
     reading.
     """
-    return LLSDXMLPrettyFormatter().format(something)
+    return LLSDXMLPrettyFormatter(indent_atom=b' '*indent, c_compat=c_compat, sort_maps=sort_maps).format(something)
 
 
-def write_pretty_xml(stream, something):
+def write_pretty_xml(stream, something, indent: int = 4, c_compat: bool = False, sort_maps: bool = True):
     """
     Serialize to passed 'stream' the python object 'something' as 'pretty'
     application/llsd+xml.
@@ -225,7 +253,7 @@ def write_pretty_xml(stream, something):
     objects. It sorts on dict (llsd map) keys alphabetically to ease human
     reading.
     """
-    return LLSDXMLPrettyFormatter().write(stream, something)
+    return LLSDXMLPrettyFormatter(indent_atom=b' '*indent, c_compat=c_compat, sort_maps=sort_maps).write(stream, something)
 
 
 def parse_xml(something):
@@ -274,7 +302,7 @@ def parse_xml_nohdr(baseparser):
     return _to_python(element[0])
 
 
-def format_xml(something):
+def format_xml(something, c_compat = False, sort_maps = False):
     """
     Format a python object as application/llsd+xml
 
@@ -283,7 +311,7 @@ def format_xml(something):
 
     See http://wiki.secondlife.com/wiki/LLSD#XML_Serialization
     """
-    return LLSDXMLFormatter().format(something)
+    return LLSDXMLFormatter(c_compat = c_compat, sort_maps = sort_maps).format(something)
 
 
 def write_xml(stream, something):
