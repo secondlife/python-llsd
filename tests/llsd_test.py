@@ -1520,7 +1520,7 @@ class LLSDPythonXMLUnitTest(unittest.TestCase):
 
         self.assertEqual(output_xml.decode("utf8"), """<?xml version="1.0" ?>
 <llsd>
-<map>
+  <map>
     <key>id</key>
     <array>
       <string>string1</string>

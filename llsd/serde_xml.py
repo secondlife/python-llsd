@@ -217,7 +217,7 @@ class LLSDXMLPrettyFormatter(LLSDXMLFormatter):
             super(LLSDXMLPrettyFormatter, self)._STRING(v)
 
 
-def format_pretty_xml(something, indent = 4, c_compat = False, sort_maps = True):
+def format_pretty_xml(something, indent = 2, c_compat = False, sort_maps = True):
     """
     Serialize a python object as 'pretty' application/llsd+xml.
 
@@ -236,7 +236,7 @@ def format_pretty_xml(something, indent = 4, c_compat = False, sort_maps = True)
     return LLSDXMLPrettyFormatter(indent_atom=b' '*indent, c_compat=c_compat, sort_maps=sort_maps).format(something)
 
 
-def write_pretty_xml(stream, something, indent = 4, c_compat = False, sort_maps = True):
+def write_pretty_xml(stream, something, indent = 2, c_compat = False, sort_maps = True):
     """
     Serialize to passed 'stream' the python object 'something' as 'pretty'
     application/llsd+xml.
