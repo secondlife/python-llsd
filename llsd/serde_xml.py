@@ -69,7 +69,7 @@ class LLSDXMLFormatter(LLSDBaseFormatter):
     interface to this functionality.
     """
 
-    def __init__(self, indent_atom: bytes = b'', eol: bytes = b'', c_compat: bool = False, sort_maps: bool = False):
+    def __init__(self, indent_atom = b'', eol = b'', c_compat = False, sort_maps = False):
         "Construct a serializer."
         # Call the super class constructor so that we have the type map
         super(LLSDXMLFormatter, self).__init__()
@@ -99,7 +99,7 @@ class LLSDXMLFormatter(LLSDBaseFormatter):
             if int(v) == v:
                 s = str(int(v))
             else:
-                s = f"{v:.25g}"
+                s = "%.25g" % v
         else:
             s = str(v)
         self.stream.writelines([b'<real>', s.encode('utf-8'),  b'</real>', self._eol])
@@ -195,7 +195,7 @@ class LLSDXMLPrettyFormatter(LLSDXMLFormatter):
     This class is not necessarily suited for serializing very large objects.
     It sorts on dict (llsd map) keys alphabetically to ease human reading.
     """
-    def __init__(self, indent_atom: bytes = b'  ', eol: bytes = b'\n', c_compat: bool = False, sort_maps: bool = True):
+    def __init__(self, indent_atom = b'  ', eol = b'\n', c_compat = False, sort_maps = True):
         "Construct a pretty serializer."
         # Call the super class constructor so that we have the type map
         super(LLSDXMLPrettyFormatter, self).__init__(indent_atom = indent_atom, eol = eol, c_compat=c_compat, sort_maps = sort_maps)
@@ -208,16 +208,16 @@ class LLSDXMLPrettyFormatter(LLSDXMLFormatter):
         if not v:
             self.stream.writelines([b'<array />', self._eol])
         else:
-            super()._ARRAY(v)
+            super(LLSDXMLPrettyFormatter, self)._ARRAY(v)
 
     def _STRING(self, v):
         if not v:
             self.stream.writelines([b'<string />', self._eol])
         else:
-            super()._STRING(v)
+            super(LLSDXMLPrettyFormatter, self)._STRING(v)
 
 
-def format_pretty_xml(something, indent: int = 4, c_compat: bool = False, sort_maps: bool = True):
+def format_pretty_xml(something, indent = 4, c_compat = False, sort_maps = True):
     """
     Serialize a python object as 'pretty' application/llsd+xml.
 
@@ -236,7 +236,7 @@ def format_pretty_xml(something, indent: int = 4, c_compat: bool = False, sort_m
     return LLSDXMLPrettyFormatter(indent_atom=b' '*indent, c_compat=c_compat, sort_maps=sort_maps).format(something)
 
 
-def write_pretty_xml(stream, something, indent: int = 4, c_compat: bool = False, sort_maps: bool = True):
+def write_pretty_xml(stream, something, indent = 4, c_compat = False, sort_maps = True):
     """
     Serialize to passed 'stream' the python object 'something' as 'pretty'
     application/llsd+xml.
