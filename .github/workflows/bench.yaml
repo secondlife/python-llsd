@@ -1,4 +1,4 @@
-name: Benchmark 
+name: Benchmark
 
 on:
   pull_request:
@@ -8,21 +8,23 @@ on:
 permissions:
   contents: write
   deployments: write
+  # Let us comment on the pull request when there's an alert.
+  pull-requests: write
 
 jobs:
   benchmark:
-    name: Run benchmarks 
+    name: Run benchmarks
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-python@v6
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.10"
 
       - name: Run benchmarks
         run: |
-          pip install .[dev] 
+          pip install .[dev]
           pytest tests/bench.py --benchmark-json benchmark.json
 
       - name: Report results

@@ -17,7 +17,10 @@ setup(
     long_description=long_description,
     long_description_content_type="text/markdown",
     packages=find_packages(exclude=("tests",)),
-    setup_requires=["setuptools_scm<6"],
+    setup_requires=[
+        "setuptools_scm<6;python_version<'3.9'",
+        "setuptools_scm;python_version>'3.8'",
+    ],
     use_scm_version={
         'local_scheme': 'no-local-version', # disable local-version to allow uploads to test.pypi.org
     },
