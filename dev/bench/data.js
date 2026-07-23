@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1770312353741,
+  "lastUpdate": 1784845193618,
   "repoUrl": "https://github.com/secondlife/python-llsd",
   "entries": {
     "Python Benchmarks": [
@@ -2580,6 +2580,163 @@ window.BENCHMARK_DATA = {
             "unit": "iter/sec",
             "range": "stddev: 0.0001777110847294827",
             "extra": "mean: 3.9504879590178 msec\nrounds: 244"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "49699333+dependabot[bot]@users.noreply.github.com",
+            "name": "dependabot[bot]",
+            "username": "dependabot[bot]"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "7730e2ea69dd6d9f450ffd789e090ccabfb9c361",
+          "message": "Bump updated GitHub Actions (#40)\n\n* Bump actions/download-artifact from 7 to 8\n\nBumps [actions/download-artifact](https://github.com/actions/download-artifact) from 7 to 8.\n- [Release notes](https://github.com/actions/download-artifact/releases)\n- [Commits](https://github.com/actions/download-artifact/compare/v7...v8)\n\n---\nupdated-dependencies:\n- dependency-name: actions/download-artifact\n  dependency-version: '8'\n  dependency-type: direct:production\n  update-type: version-update:semver-major\n...\n\nSigned-off-by: dependabot[bot] <support@github.com>\n\n* Use a newer setuptools-scm where available that's compatible with setuptools 82+\n\nsetuptools 82.0.0 no longer comes with pkg_resources. Don't pin setuptools-scm\nso that, when we get setuptools 82+, we have a shot at getting a compatible\nversion of setuptools-scm that doesn't require pkg_resources.\n\n<https://setuptools.pypa.io/en/stable/deprecated/pkg_resources.html>\n\nBefore Python 3.9 we still need an old setuptools-scm that doesn't refer to the\ndistutils.cmd `ignore_egg_info_in_manifest` attribute that's not defined in\nPython 3.8's version of distutils.\n\n* Bump actions/upload-artifact from 6 to 7 (#41)\n\nBumps [actions/upload-artifact](https://github.com/actions/upload-artifact) from 6 to 7.\n- [Release notes](https://github.com/actions/upload-artifact/releases)\n- [Commits](https://github.com/actions/upload-artifact/compare/v6...v7)\n\n---\nupdated-dependencies:\n- dependency-name: actions/upload-artifact\n  dependency-version: '7'\n  dependency-type: direct:production\n  update-type: version-update:semver-major\n...\n\nSigned-off-by: dependabot[bot] <support@github.com>\nCo-authored-by: dependabot[bot] <49699333+dependabot[bot]@users.noreply.github.com>\n\n* Bump codecov/codecov-action from 5 to 7 (#44)\n\nBumps [codecov/codecov-action](https://github.com/codecov/codecov-action) from 5 to 7.\n- [Release notes](https://github.com/codecov/codecov-action/releases)\n- [Changelog](https://github.com/codecov/codecov-action/blob/main/CHANGELOG.md)\n- [Commits](https://github.com/codecov/codecov-action/compare/v5...v7)\n\n---\nupdated-dependencies:\n- dependency-name: codecov/codecov-action\n  dependency-version: '7'\n  dependency-type: direct:production\n  update-type: version-update:semver-major\n...\n\nSigned-off-by: dependabot[bot] <support@github.com>\nCo-authored-by: dependabot[bot] <49699333+dependabot[bot]@users.noreply.github.com>\n\n* Let the benchmark workflow post its comments\n\n* Bump actions/setup-python from 6 to 7 (#45)\n\nBumps [actions/setup-python](https://github.com/actions/setup-python) from 6 to 7.\n- [Release notes](https://github.com/actions/setup-python/releases)\n- [Commits](https://github.com/actions/setup-python/compare/v6...v7)\n\n---\nupdated-dependencies:\n- dependency-name: actions/setup-python\n  dependency-version: '7'\n  dependency-type: direct:production\n  update-type: version-update:semver-major\n...\n\nSigned-off-by: dependabot[bot] <support@github.com>\nCo-authored-by: dependabot[bot] <49699333+dependabot[bot]@users.noreply.github.com>\n\n* Bump actions/checkout from 6 to 7 (#46)\n\nBumps [actions/checkout](https://github.com/actions/checkout) from 6 to 7.\n- [Release notes](https://github.com/actions/checkout/releases)\n- [Changelog](https://github.com/actions/checkout/blob/main/CHANGELOG.md)\n- [Commits](https://github.com/actions/checkout/compare/v6...v7)\n\n---\nupdated-dependencies:\n- dependency-name: actions/checkout\n  dependency-version: '7'\n  dependency-type: direct:production\n  update-type: version-update:semver-major\n...\n\nSigned-off-by: dependabot[bot] <support@github.com>\nCo-authored-by: dependabot[bot] <49699333+dependabot[bot]@users.noreply.github.com>\n\n---------\n\nSigned-off-by: dependabot[bot] <support@github.com>\nCo-authored-by: dependabot[bot] <49699333+dependabot[bot]@users.noreply.github.com>",
+          "timestamp": "2026-07-23T15:18:58-07:00",
+          "tree_id": "17c9fe68c72491dc128ebc39d709e4e64e7477c3",
+          "url": "https://github.com/secondlife/python-llsd/commit/7730e2ea69dd6d9f450ffd789e090ccabfb9c361"
+        },
+        "date": 1784845192749,
+        "tool": "pytest",
+        "benches": [
+          {
+            "name": "tests/bench.py::test_parse_xml_stream",
+            "value": 32556.173618598245,
+            "unit": "iter/sec",
+            "range": "stddev: 0.000006029363591670523",
+            "extra": "mean: 30.716140407505808 usec\nrounds: 4024"
+          },
+          {
+            "name": "tests/bench.py::test_parse_notation_stream",
+            "value": 10531.990964431385,
+            "unit": "iter/sec",
+            "range": "stddev: 0.000015506078777852585",
+            "extra": "mean: 94.94880914512723 usec\nrounds: 5533"
+          },
+          {
+            "name": "tests/bench.py::test_parse_binary_stream",
+            "value": 34981.481255952596,
+            "unit": "iter/sec",
+            "range": "stddev: 0.0000182270394666068",
+            "extra": "mean: 28.58655391643359 usec\nrounds: 15320"
+          },
+          {
+            "name": "tests/bench.py::test_parse_notation_bytes",
+            "value": 11483.295502062432,
+            "unit": "iter/sec",
+            "range": "stddev: 0.000015744399385571317",
+            "extra": "mean: 87.0830154828287 usec\nrounds: 6265"
+          },
+          {
+            "name": "tests/bench.py::test_parse_xml_bytes",
+            "value": 41923.40290876973,
+            "unit": "iter/sec",
+            "range": "stddev: 0.0000013133560145506865",
+            "extra": "mean: 23.853025532686793 usec\nrounds: 10888"
+          },
+          {
+            "name": "tests/bench.py::test_parse_binary_bytes",
+            "value": 38480.16964112956,
+            "unit": "iter/sec",
+            "range": "stddev: 0.00001867627759130424",
+            "extra": "mean: 25.98741142063857 usec\nrounds: 16584"
+          },
+          {
+            "name": "tests/bench.py::test_format_xml",
+            "value": 44141.399894971204,
+            "unit": "iter/sec",
+            "range": "stddev: 0.000006789173594182875",
+            "extra": "mean: 22.654469554191117 usec\nrounds: 11036"
+          },
+          {
+            "name": "tests/bench.py::test_format_notation",
+            "value": 53523.414357329784,
+            "unit": "iter/sec",
+            "range": "stddev: 0.000007441663353468579",
+            "extra": "mean: 18.68341196105055 usec\nrounds: 17975"
+          },
+          {
+            "name": "tests/bench.py::test_format_binary",
+            "value": 58858.406123350236,
+            "unit": "iter/sec",
+            "range": "stddev: 0.0000012301654482549977",
+            "extra": "mean: 16.989926602910188 usec\nrounds: 17671"
+          },
+          {
+            "name": "tests/bench.py::test_format_xml_deep",
+            "value": 514.5747504127535,
+            "unit": "iter/sec",
+            "range": "stddev: 0.0000642288887575014",
+            "extra": "mean: 1.943352251928169 msec\nrounds: 389"
+          },
+          {
+            "name": "tests/bench.py::test_format_xml_wide",
+            "value": 1.2711052714501199,
+            "unit": "iter/sec",
+            "range": "stddev: 0.006500812636452897",
+            "extra": "mean: 786.7169009999984 msec\nrounds: 5"
+          },
+          {
+            "name": "tests/bench.py::test_format_notation_deep",
+            "value": 641.1553089962898,
+            "unit": "iter/sec",
+            "range": "stddev: 0.000057316968037184834",
+            "extra": "mean: 1.5596845038458331 msec\nrounds: 520"
+          },
+          {
+            "name": "tests/bench.py::test_format_notation_wide",
+            "value": 1.6342962774242902,
+            "unit": "iter/sec",
+            "range": "stddev: 0.008516667813869179",
+            "extra": "mean: 611.8841570000001 msec\nrounds: 5"
+          },
+          {
+            "name": "tests/bench.py::test_format_notation_wide_array",
+            "value": 2.82002691179881,
+            "unit": "iter/sec",
+            "range": "stddev: 0.003228458160957291",
+            "extra": "mean: 354.60654500000146 msec\nrounds: 5"
+          },
+          {
+            "name": "tests/bench.py::test_format_binary_deep",
+            "value": 590.816377496675,
+            "unit": "iter/sec",
+            "range": "stddev: 0.000048079311004653764",
+            "extra": "mean: 1.6925732564101574 msec\nrounds: 468"
+          },
+          {
+            "name": "tests/bench.py::test_format_binary_wide",
+            "value": 1.4706725117498405,
+            "unit": "iter/sec",
+            "range": "stddev: 0.016132769280764406",
+            "extra": "mean: 679.9610328000057 msec\nrounds: 5"
+          },
+          {
+            "name": "tests/bench.py::test_format_binary_wide_array",
+            "value": 2.0699981756609227,
+            "unit": "iter/sec",
+            "range": "stddev: 0.009322876817725822",
+            "extra": "mean: 483.0922132000012 msec\nrounds: 5"
+          },
+          {
+            "name": "tests/bench.py::test_parse_xml_deep",
+            "value": 460.1498802760382,
+            "unit": "iter/sec",
+            "range": "stddev: 0.010075202557985925",
+            "extra": "mean: 2.173204955307415 msec\nrounds: 537"
+          },
+          {
+            "name": "tests/bench.py::test_parse_binary_deep",
+            "value": 454.09155265018865,
+            "unit": "iter/sec",
+            "range": "stddev: 0.0005404883796261097",
+            "extra": "mean: 2.2021990811407015 msec\nrounds: 456"
           }
         ]
       }
