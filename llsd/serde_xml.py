@@ -162,6 +162,7 @@ class LLSDXMLFormatter(LLSDBaseFormatter):
         """
         self.stream.writelines([b'<?xml version="1.0" ?>', self._eol,
                                 b'<llsd>', self._eol])
+        self._indent()
         self._generate(something)
         self.stream.write(b'</llsd>' + self._eol)
 
